@@ -9,6 +9,7 @@ export interface MortgageInputs {
     heating: number;
     water: number;
     repairs: number;
+    rentExpenses: number;
     downpayment: number;
     loanPeriodFixed: LoanPeriod;
     loanPeriodVariable: LoanPeriod;
@@ -18,20 +19,27 @@ export interface MortgageInputs {
     interestRateF3: number;
     interestRateF5: number;
     interestRateF30: number;
+    bidragssatsAdjustment: number;
+    bankLoanInterest: number;
+    bankLoanPeriod: number;
 }
 
 export interface YearlyBreakdown {
     year: number;
     fixedBalance: number;
     variableBalance: number;
+    bankLoanBalance: number;
     totalBalance: number;
     fixedPayment: number;
     variablePayment: number;
+    bankLoanPayment: number;
     totalPayment: number;
     fixedInterest: number;
     variablePrincipal: number;
     fixedPrincipal: number;
     variableInterest: number;
+    bankLoanInterest: number;
+    bankLoanPrincipal: number;
     monthlyPayment: number;
     monthlyHousingCost: number;
 }
@@ -48,62 +56,41 @@ export interface MortgageSummary {
 }
 
 const defaultInputs: MortgageInputs = {
-    propertyValue: 0,
-    ejerudgift: 0,
-    heating: 0,
+    propertyValue: 6000000,
+    ejerudgift: 4000,
+    heating: 1000,
     water: 0,
     repairs: 0,
-    downpayment: 0,
+    rentExpenses: 15000,
+    downpayment: 1000000,
     loanPeriodFixed: 30,
     loanPeriodVariable: 30,
-    fixedMortgagePercentage: 80,
+    fixedMortgagePercentage: 100,
     flexibleLoanType: 'F5',
     withRepayments: true,
     interestRateF3: 3.59,
     interestRateF5: 3.49,
     interestRateF30: 5,
+    bidragssatsAdjustment: 0,
+    bankLoanInterest: 6,
+    bankLoanPeriod: 10,
 };
 
-function calculateAnnuityPayment(
-    principal: number,
-    annualRate: number,
-    years: number,
-): number {
-    if (principal <= 0 || years <= 0) {
-        return 0;
-    }
-
-    const monthlyRate = annualRate / 100 / 12;
-    const numberOfPayments = years * 12;
-
-    if (monthlyRate === 0) {
-        return principal / numberOfPayments;
-    }
-
-    const annuityFactor =
-        (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-        (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
-
-    return principal * annuityFactor;
-}
-
-function calculateInterestOnlyPayment(
-    principal: number,
-    annualRate: number,
-): number {
-    if (principal <= 0) {
-        return 0;
-    }
-
-    return (principal * (annualRate / 100)) / 12;
-}
+const bidragssats = {
+    F3: { withRepayments: 1.05, withoutRepayments: 1.38 },
+    F5: { withRepayments: 0.85, withoutRepayments: 0.77 },
+    F30: { withRepayments: 0.68, withoutRepayments: 1.57 },
+};
 
 export function useMortgageCalculator() {
     const inputs = reactive<MortgageInputs>({ ...defaultInputs });
 
     const totalLoanAmount = computed(() => {
-        const loan = inputs.propertyValue - inputs.downpayment;
-        return Math.max(0, loan);
+        const maxMortgage = inputs.propertyValue * 0.8;
+        const downpaymentBasedLoan = inputs.propertyValue - inputs.downpayment;
+        // If downpayment covers more than 20%, use property - downpayment
+        // Otherwise cap at 80% of property value
+        return Math.max(0, Math.min(downpaymentBasedLoan, maxMortgage));
     });
 
     const fixedLoanAmount = computed(() => {
@@ -114,16 +101,46 @@ export function useMortgageCalculator() {
         return totalLoanAmount.value - fixedLoanAmount.value;
     });
 
-    const variableInterestRate = computed(() => {
+    const variableBaseRate = computed(() => {
         return inputs.flexibleLoanType === 'F3'
             ? inputs.interestRateF3
             : inputs.interestRateF5;
+    });
+
+    const fixedBidragssats = computed(() => {
+        const baseBidragssats = inputs.withRepayments
+            ? bidragssats.F30.withRepayments
+            : bidragssats.F30.withoutRepayments;
+        const adjustment = baseBidragssats * (inputs.bidragssatsAdjustment / 100);
+        return baseBidragssats - adjustment;
+    });
+
+    const variableBidragssats = computed(() => {
+        const loanType = inputs.flexibleLoanType;
+        const baseBidragssats = inputs.withRepayments
+            ? bidragssats[loanType].withRepayments
+            : bidragssats[loanType].withoutRepayments;
+        const adjustment = baseBidragssats * (inputs.bidragssatsAdjustment / 100);
+        return baseBidragssats - adjustment;
+    });
+
+    const fixedEffectiveRate = computed(() => {
+        return inputs.interestRateF30 + fixedBidragssats.value;
+    });
+
+    const variableEffectiveRate = computed(() => {
+        return variableBaseRate.value + variableBidragssats.value;
     });
 
     const monthlyUtilities = computed(() => {
         return (
             inputs.ejerudgift + inputs.heating + inputs.water + inputs.repairs
         );
+    });
+
+    const bankLoanAmount = computed(() => {
+        const capitalNeeded = inputs.propertyValue * 0.2;
+        return Math.max(0, capitalNeeded - inputs.downpayment);
     });
 
     const yearlyBreakdown = computed<YearlyBreakdown[]>(() => {
@@ -135,106 +152,121 @@ export function useMortgageCalculator() {
 
         let fixedBalance = fixedLoanAmount.value;
         let variableBalance = variableLoanAmount.value;
+        let bankBalance = bankLoanAmount.value;
 
         const maxYears = Math.max(
             inputs.loanPeriodFixed,
             inputs.loanPeriodVariable,
+            inputs.bankLoanPeriod,
         );
 
-        const fixedMonthlyPayment = inputs.withRepayments
-            ? calculateAnnuityPayment(
-                  fixedLoanAmount.value,
-                  inputs.interestRateF30,
-                  inputs.loanPeriodFixed,
-              )
-            : calculateInterestOnlyPayment(
-                  fixedLoanAmount.value,
-                  inputs.interestRateF30,
-              );
+        const interestOnlyYears = 10;
+        const fixedRepaymentYears = inputs.loanPeriodFixed - interestOnlyYears;
+        const variableRepaymentYears =
+            inputs.loanPeriodVariable - interestOnlyYears;
 
-        const variableMonthlyPayment = inputs.withRepayments
-            ? calculateAnnuityPayment(
-                  variableLoanAmount.value,
-                  variableInterestRate.value,
-                  inputs.loanPeriodVariable,
-              )
-            : calculateInterestOnlyPayment(
-                  variableLoanAmount.value,
-                  variableInterestRate.value,
-              );
+        const yearlyFixedPrincipalAmount = inputs.withRepayments
+            ? fixedLoanAmount.value / inputs.loanPeriodFixed
+            : fixedRepaymentYears > 0
+              ? fixedLoanAmount.value / fixedRepaymentYears
+              : 0;
+
+        const yearlyVariablePrincipalAmount = inputs.withRepayments
+            ? variableLoanAmount.value / inputs.loanPeriodVariable
+            : variableRepaymentYears > 0
+              ? variableLoanAmount.value / variableRepaymentYears
+              : 0;
+
+        const yearlyBankLoanPrincipalAmount =
+            inputs.bankLoanPeriod > 0
+                ? bankLoanAmount.value / inputs.bankLoanPeriod
+                : 0;
 
         for (let year = 1; year <= maxYears; year++) {
-            let yearlyFixedPayment = 0;
-            let yearlyVariablePayment = 0;
             let yearlyFixedInterest = 0;
             let yearlyVariableInterest = 0;
             let yearlyFixedPrincipal = 0;
             let yearlyVariablePrincipal = 0;
+            let yearlyBankLoanInterest = 0;
+            let yearlyBankLoanPrincipal = 0;
 
-            for (let month = 1; month <= 12; month++) {
-                if (fixedBalance > 0 && year <= inputs.loanPeriodFixed) {
-                    const monthlyFixedInterest =
-                        (fixedBalance * (inputs.interestRateF30 / 100)) / 12;
-                    const monthlyFixedPrincipal = inputs.withRepayments
-                        ? Math.min(
-                              fixedMonthlyPayment - monthlyFixedInterest,
-                              fixedBalance,
-                          )
-                        : 0;
+            const isInterestOnlyYear =
+                !inputs.withRepayments && year <= interestOnlyYears;
 
-                    yearlyFixedInterest += monthlyFixedInterest;
-                    yearlyFixedPrincipal += monthlyFixedPrincipal;
-                    yearlyFixedPayment +=
-                        monthlyFixedInterest + monthlyFixedPrincipal;
-                    fixedBalance = Math.max(
-                        0,
-                        fixedBalance - monthlyFixedPrincipal,
+            if (fixedBalance > 0 && year <= inputs.loanPeriodFixed) {
+                yearlyFixedInterest =
+                    fixedBalance * (fixedEffectiveRate.value / 100);
+                if (!isInterestOnlyYear) {
+                    yearlyFixedPrincipal = Math.min(
+                        yearlyFixedPrincipalAmount,
+                        fixedBalance,
                     );
                 }
-
-                if (variableBalance > 0 && year <= inputs.loanPeriodVariable) {
-                    const monthlyVariableInterest =
-                        (variableBalance * (variableInterestRate.value / 100)) /
-                        12;
-                    const monthlyVariablePrincipal = inputs.withRepayments
-                        ? Math.min(
-                              variableMonthlyPayment - monthlyVariableInterest,
-                              variableBalance,
-                          )
-                        : 0;
-
-                    yearlyVariableInterest += monthlyVariableInterest;
-                    yearlyVariablePrincipal += monthlyVariablePrincipal;
-                    yearlyVariablePayment +=
-                        monthlyVariableInterest + monthlyVariablePrincipal;
-                    variableBalance = Math.max(
-                        0,
-                        variableBalance - monthlyVariablePrincipal,
-                    );
-                }
+                fixedBalance = Math.max(0, fixedBalance - yearlyFixedPrincipal);
             }
 
+            if (variableBalance > 0 && year <= inputs.loanPeriodVariable) {
+                yearlyVariableInterest =
+                    variableBalance * (variableEffectiveRate.value / 100);
+                if (!isInterestOnlyYear) {
+                    yearlyVariablePrincipal = Math.min(
+                        yearlyVariablePrincipalAmount,
+                        variableBalance,
+                    );
+                }
+                variableBalance = Math.max(
+                    0,
+                    variableBalance - yearlyVariablePrincipal,
+                );
+            }
+
+            if (bankBalance > 0 && year <= inputs.bankLoanPeriod) {
+                yearlyBankLoanInterest =
+                    bankBalance * (inputs.bankLoanInterest / 100);
+                yearlyBankLoanPrincipal = Math.min(
+                    yearlyBankLoanPrincipalAmount,
+                    bankBalance,
+                );
+                bankBalance = Math.max(
+                    0,
+                    bankBalance - yearlyBankLoanPrincipal,
+                );
+            }
+
+            const yearlyFixedPayment =
+                yearlyFixedInterest + yearlyFixedPrincipal;
+            const yearlyVariablePayment =
+                yearlyVariableInterest + yearlyVariablePrincipal;
+            const yearlyBankLoanPayment =
+                yearlyBankLoanInterest + yearlyBankLoanPrincipal;
+
             const totalYearlyPayment =
-                yearlyFixedPayment + yearlyVariablePayment;
+                yearlyFixedPayment +
+                yearlyVariablePayment +
+                yearlyBankLoanPayment;
             const monthlyPayment = totalYearlyPayment / 12;
 
             breakdown.push({
                 year,
                 fixedBalance,
                 variableBalance,
-                totalBalance: fixedBalance + variableBalance,
+                bankLoanBalance: bankBalance,
+                totalBalance: fixedBalance + variableBalance + bankBalance,
                 fixedPayment: yearlyFixedPayment,
                 variablePayment: yearlyVariablePayment,
+                bankLoanPayment: yearlyBankLoanPayment,
                 totalPayment: totalYearlyPayment,
                 fixedInterest: yearlyFixedInterest,
                 variableInterest: yearlyVariableInterest,
+                bankLoanInterest: yearlyBankLoanInterest,
                 fixedPrincipal: yearlyFixedPrincipal,
                 variablePrincipal: yearlyVariablePrincipal,
+                bankLoanPrincipal: yearlyBankLoanPrincipal,
                 monthlyPayment,
                 monthlyHousingCost: monthlyPayment + monthlyUtilities.value,
             });
 
-            if (fixedBalance <= 0 && variableBalance <= 0) {
+            if (fixedBalance <= 0 && variableBalance <= 0 && bankBalance <= 0) {
                 break;
             }
         }
@@ -301,10 +333,15 @@ export function useMortgageCalculator() {
         totalLoanAmount,
         fixedLoanAmount,
         variableLoanAmount,
-        variableInterestRate,
+        bankLoanAmount,
+        variableBaseRate,
         monthlyUtilities,
         yearlyBreakdown,
         summary,
+        fixedBidragssats,
+        variableBidragssats,
+        fixedEffectiveRate,
+        variableEffectiveRate,
         formatCurrency,
         formatNumber,
         resetInputs,

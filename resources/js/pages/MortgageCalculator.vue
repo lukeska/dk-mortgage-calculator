@@ -20,6 +20,13 @@ const {
     inputs,
     summary,
     yearlyBreakdown,
+    fixedLoanAmount,
+    variableLoanAmount,
+    bankLoanAmount,
+    fixedBidragssats,
+    variableBidragssats,
+    fixedEffectiveRate,
+    variableEffectiveRate,
     formatCurrency,
     formatNumber,
 } = useMortgageCalculator();
@@ -65,6 +72,19 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                     min="0"
                                     step="10000"
                                     placeholder="e.g. 150000"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="capitalNeeded">
+                                    Capital Needed (DKK)
+                                </Label>
+                                <Input
+                                    id="capitalNeeded"
+                                    :model-value="inputs.propertyValue * 0.2"
+                                    type="number"
+                                    readonly
+                                    class="bg-muted cursor-not-allowed"
                                 />
                             </div>
                         </CardContent>
@@ -212,16 +232,84 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                             </div>
 
                             <div class="flex items-center gap-3">
-                                <Checkbox
+                                <input
                                     id="withRepayments"
-                                    :checked="inputs.withRepayments"
-                                    @update:checked="
-                                        inputs.withRepayments = $event as boolean
-                                    "
+                                    v-model="inputs.withRepayments"
+                                    type="checkbox"
+                                    class="border-input size-4 rounded border"
                                 />
                                 <Label for="withRepayments" class="cursor-pointer">
                                     With Repayments (Annuity)
                                 </Label>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Bank Loan</CardTitle>
+                        </CardHeader>
+                        <CardContent class="flex flex-col gap-4">
+                            <div class="flex flex-col gap-2">
+                                <Label for="bankLoanNeeded">
+                                    Bank Loan Needed (DKK)
+                                </Label>
+                                <Input
+                                    id="bankLoanNeeded"
+                                    :model-value="Math.max(0, inputs.propertyValue * 0.2 - inputs.downpayment)"
+                                    type="number"
+                                    readonly
+                                    class="bg-muted cursor-not-allowed"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="bankLoanInterest">
+                                    Bank Loan Interest (%)
+                                </Label>
+                                <Input
+                                    id="bankLoanInterest"
+                                    v-model="inputs.bankLoanInterest"
+                                    type="number"
+                                    min="0"
+                                    max="30"
+                                    step="0.1"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="bankLoanPeriod">
+                                    Bank Loan Period (years)
+                                </Label>
+                                <Input
+                                    id="bankLoanPeriod"
+                                    v-model="inputs.bankLoanPeriod"
+                                    type="number"
+                                    min="1"
+                                    max="30"
+                                    step="1"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Rent Cost</CardTitle>
+                        </CardHeader>
+                        <CardContent class="flex flex-col gap-4">
+                            <div class="flex flex-col gap-2">
+                                <Label for="rentExpenses">
+                                    Rent + expenses (DKK/month)
+                                </Label>
+                                <Input
+                                    id="rentExpenses"
+                                    v-model="inputs.rentExpenses"
+                                    type="number"
+                                    min="0"
+                                    step="100"
+                                    placeholder="e.g. 15000"
+                                />
                             </div>
                         </CardContent>
                     </Card>
@@ -272,6 +360,76 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                     step="0.01"
                                 />
                             </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="bidragssatsAdjustment">
+                                    Bidragssats Adjustment (%)
+                                </Label>
+                                <Input
+                                    id="bidragssatsAdjustment"
+                                    v-model="inputs.bidragssatsAdjustment"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                />
+                            </div>
+
+                            <div class="border-border mt-2 border-t pt-4">
+                                <p class="text-muted-foreground mb-3 text-sm font-medium">
+                                    Effective Rates (with Bidragssats)
+                                </p>
+                                <div class="flex flex-col gap-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">F30 (Fixed)</span>
+                                        <span class="font-medium">
+                                            {{ inputs.interestRateF30 }}% + {{ fixedBidragssats }}% = {{ fixedEffectiveRate.toFixed(2) }}%
+                                        </span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">{{ inputs.flexibleLoanType }} (Variable)</span>
+                                        <span class="font-medium">
+                                            {{
+                                                inputs.flexibleLoanType === 'F3'
+                                                    ? inputs.interestRateF3
+                                                    : inputs.interestRateF5
+                                            }}% + {{ variableBidragssats }}% = {{ variableEffectiveRate.toFixed(2) }}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="border-border mt-2 border-t pt-4">
+                                <p class="text-muted-foreground mb-3 text-sm font-medium">
+                                    Bidragssats Reference
+                                </p>
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="text-muted-foreground border-b">
+                                            <th class="pb-2 text-left font-medium">Type</th>
+                                            <th class="pb-2 text-right font-medium">w/ Repay</th>
+                                            <th class="pb-2 text-right font-medium">No Repay</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-muted-foreground">
+                                        <tr>
+                                            <td class="py-1">F3</td>
+                                            <td class="py-1 text-right">+1.05%</td>
+                                            <td class="py-1 text-right">+1.38%</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-1">F5</td>
+                                            <td class="py-1 text-right">+0.85%</td>
+                                            <td class="py-1 text-right">+0.77%</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-1">F30</td>
+                                            <td class="py-1 text-right">+0.68%</td>
+                                            <td class="py-1 text-right">+1.57%</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -307,8 +465,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         {{ formatCurrency(summary.fixedLoanAmount) }}
                                     </span>
                                     <span class="text-muted-foreground text-xs">
-                                        {{ inputs.fixedMortgagePercentage }}% at
-                                        {{ inputs.interestRateF30 }}%
+                                        {{ inputs.interestRateF30 }}% + {{ fixedBidragssats }}% bidrag = {{ fixedEffectiveRate.toFixed(2) }}%
                                     </span>
                                 </div>
                                 <div
@@ -323,12 +480,11 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         {{ formatCurrency(summary.variableLoanAmount) }}
                                     </span>
                                     <span class="text-muted-foreground text-xs">
-                                        {{ 100 - inputs.fixedMortgagePercentage }}% at
                                         {{
                                             inputs.flexibleLoanType === 'F3'
                                                 ? inputs.interestRateF3
                                                 : inputs.interestRateF5
-                                        }}%
+                                        }}% + {{ variableBidragssats }}% bidrag = {{ variableEffectiveRate.toFixed(2) }}%
                                     </span>
                                 </div>
                                 <div
@@ -395,6 +551,17 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 :breakdown="yearlyBreakdown"
                                 :format-currency="formatCurrency"
                                 :format-number="formatNumber"
+                                :ejerudgift="inputs.ejerudgift"
+                                :heating="inputs.heating"
+                                :water="inputs.water"
+                                :repairs="inputs.repairs"
+                                :rent-expenses="inputs.rentExpenses"
+                                :variable-effective-rate="variableEffectiveRate"
+                                :flexible-loan-type="inputs.flexibleLoanType"
+                                :has-variable-loan="inputs.fixedMortgagePercentage < 100"
+                                :initial-fixed-balance="fixedLoanAmount"
+                                :initial-variable-balance="variableLoanAmount"
+                                :initial-bank-loan-balance="bankLoanAmount"
                             />
                         </CardContent>
                     </Card>
