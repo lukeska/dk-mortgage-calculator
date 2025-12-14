@@ -20,8 +20,15 @@ export interface MortgageInputs {
     interestRateF5: number;
     interestRateF30: number;
     bidragssatsAdjustment: number;
+    f30NoRepay: number;
+    f30WithRepay: number;
     bankLoanInterest: number;
     bankLoanPeriod: number;
+    inflationEjerudgift: number;
+    inflationHeating: number;
+    inflationWater: number;
+    inflationRepairs: number;
+    inflationRent: number;
 }
 
 export interface YearlyBreakdown {
@@ -42,6 +49,13 @@ export interface YearlyBreakdown {
     bankLoanPrincipal: number;
     monthlyPayment: number;
     monthlyHousingCost: number;
+    ejerudgift: number;
+    heating: number;
+    water: number;
+    repairs: number;
+    rentExpenses: number;
+    monthlyUtilities: number;
+    variableRateForYear: number;
 }
 
 export interface MortgageSummary {
@@ -72,8 +86,15 @@ const defaultInputs: MortgageInputs = {
     interestRateF5: 3.49,
     interestRateF30: 5,
     bidragssatsAdjustment: 0,
+    f30NoRepay: 91,
+    f30WithRepay: 96,
     bankLoanInterest: 6,
     bankLoanPeriod: 10,
+    inflationEjerudgift: 2,
+    inflationHeating: 2,
+    inflationWater: 2,
+    inflationRepairs: 2,
+    inflationRent: 2,
 };
 
 const bidragssats = {
@@ -84,6 +105,7 @@ const bidragssats = {
 
 export function useMortgageCalculator() {
     const inputs = reactive<MortgageInputs>({ ...defaultInputs });
+    const variableRateOverrides = reactive<Record<number, number>>({});
 
     const totalLoanAmount = computed(() => {
         const maxMortgage = inputs.propertyValue * 0.8;
@@ -124,6 +146,41 @@ export function useMortgageCalculator() {
         return baseBidragssats - adjustment;
     });
 
+    function isEditableYear(year: number): boolean {
+        if (inputs.flexibleLoanType === 'F5') {
+            // F5: editable at years 6, 11, 16, 21, 26 (every 5 years starting from 6)
+            return year >= 6 && (year - 6) % 5 === 0;
+        } else {
+            // F3: editable at years 4, 7, 10, 13, ... (every 3 years starting from 4)
+            return year >= 4 && (year - 4) % 3 === 0;
+        }
+    }
+
+    function getVariableRateForYear(year: number): number {
+        // Find the most recent override at or before this year
+        let effectiveRate = variableBaseRate.value;
+        const overrideYears = Object.keys(variableRateOverrides)
+            .map(Number)
+            .filter((y) => y <= year)
+            .sort((a, b) => a - b);
+
+        if (overrideYears.length > 0) {
+            const lastOverrideYear = overrideYears[overrideYears.length - 1];
+            effectiveRate = variableRateOverrides[lastOverrideYear];
+        }
+
+        return effectiveRate;
+    }
+
+    function setVariableRateForYear(year: number, rate: number) {
+        variableRateOverrides[year] = rate;
+    }
+
+    function getEffectiveVariableRateForYear(year: number): number {
+        const baseRate = getVariableRateForYear(year);
+        return baseRate + variableBidragssats.value;
+    }
+
     const fixedEffectiveRate = computed(() => {
         return inputs.interestRateF30 + fixedBidragssats.value;
     });
@@ -143,6 +200,11 @@ export function useMortgageCalculator() {
         return Math.max(0, capitalNeeded - inputs.downpayment);
     });
 
+    const fixedLoanPlusBond = computed(() => {
+        const bondPercentage = inputs.withRepayments ? inputs.f30WithRepay : inputs.f30NoRepay;
+        return Math.round((100 * fixedLoanAmount.value) / bondPercentage);
+    });
+
     const yearlyBreakdown = computed<YearlyBreakdown[]>(() => {
         const breakdown: YearlyBreakdown[] = [];
 
@@ -150,9 +212,15 @@ export function useMortgageCalculator() {
             return breakdown;
         }
 
-        let fixedBalance = fixedLoanAmount.value;
+        let fixedBalance = fixedLoanPlusBond.value;
         let variableBalance = variableLoanAmount.value;
         let bankBalance = bankLoanAmount.value;
+
+        let currentEjerudgift = inputs.ejerudgift * 12;
+        let currentHeating = inputs.heating * 12;
+        let currentWater = inputs.water * 12;
+        let currentRepairs = inputs.repairs * 12;
+        let currentRent = inputs.rentExpenses * 12;
 
         const maxYears = Math.max(
             inputs.loanPeriodFixed,
@@ -166,9 +234,9 @@ export function useMortgageCalculator() {
             inputs.loanPeriodVariable - interestOnlyYears;
 
         const yearlyFixedPrincipalAmount = inputs.withRepayments
-            ? fixedLoanAmount.value / inputs.loanPeriodFixed
+            ? fixedLoanPlusBond.value / inputs.loanPeriodFixed
             : fixedRepaymentYears > 0
-              ? fixedLoanAmount.value / fixedRepaymentYears
+              ? fixedLoanPlusBond.value / fixedRepaymentYears
               : 0;
 
         const yearlyVariablePrincipalAmount = inputs.withRepayments
@@ -205,9 +273,11 @@ export function useMortgageCalculator() {
                 fixedBalance = Math.max(0, fixedBalance - yearlyFixedPrincipal);
             }
 
+            const effectiveVariableRateForYear = getEffectiveVariableRateForYear(year);
+
             if (variableBalance > 0 && year <= inputs.loanPeriodVariable) {
                 yearlyVariableInterest =
-                    variableBalance * (variableEffectiveRate.value / 100);
+                    variableBalance * (effectiveVariableRateForYear / 100);
                 if (!isInterestOnlyYear) {
                     yearlyVariablePrincipal = Math.min(
                         yearlyVariablePrincipalAmount,
@@ -246,6 +316,12 @@ export function useMortgageCalculator() {
                 yearlyBankLoanPayment;
             const monthlyPayment = totalYearlyPayment / 12;
 
+            const yearlyUtilities =
+                currentEjerudgift +
+                currentHeating +
+                currentWater +
+                currentRepairs;
+
             breakdown.push({
                 year,
                 fixedBalance,
@@ -263,8 +339,22 @@ export function useMortgageCalculator() {
                 variablePrincipal: yearlyVariablePrincipal,
                 bankLoanPrincipal: yearlyBankLoanPrincipal,
                 monthlyPayment,
-                monthlyHousingCost: monthlyPayment + monthlyUtilities.value,
+                monthlyHousingCost: monthlyPayment + yearlyUtilities / 12,
+                ejerudgift: currentEjerudgift,
+                heating: currentHeating,
+                water: currentWater,
+                repairs: currentRepairs,
+                rentExpenses: currentRent,
+                monthlyUtilities: yearlyUtilities / 12,
+                variableRateForYear: effectiveVariableRateForYear,
             });
+
+            // Apply inflation for next year
+            currentEjerudgift *= 1 + inputs.inflationEjerudgift / 100;
+            currentHeating *= 1 + inputs.inflationHeating / 100;
+            currentWater *= 1 + inputs.inflationWater / 100;
+            currentRepairs *= 1 + inputs.inflationRepairs / 100;
+            currentRent *= 1 + inputs.inflationRent / 100;
 
             if (fixedBalance <= 0 && variableBalance <= 0 && bankBalance <= 0) {
                 break;
@@ -334,6 +424,7 @@ export function useMortgageCalculator() {
         fixedLoanAmount,
         variableLoanAmount,
         bankLoanAmount,
+        fixedLoanPlusBond,
         variableBaseRate,
         monthlyUtilities,
         yearlyBreakdown,
@@ -345,5 +436,8 @@ export function useMortgageCalculator() {
         formatCurrency,
         formatNumber,
         resetInputs,
+        isEditableYear,
+        setVariableRateForYear,
+        variableRateOverrides,
     };
 }

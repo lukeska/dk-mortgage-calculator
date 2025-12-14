@@ -16,24 +16,48 @@ const props = defineProps<{
     initialFixedBalance: number;
     initialVariableBalance: number;
     initialBankLoanBalance: number;
+    isEditableYear: (year: number) => boolean;
+    setVariableRateForYear: (year: number, rate: number) => void;
+    variableRateOverrides: Record<number, number>;
 }>();
 
-interface OwnershipCostRow {
-    key: string;
-    label: string;
-    getValue: () => number;
+function handleRateChange(year: number, event: Event) {
+    const target = event.target as HTMLInputElement;
+    const value = parseFloat(target.value);
+    if (!isNaN(value)) {
+        props.setVariableRateForYear(year, value);
+    }
 }
 
-const ownershipCostRows: OwnershipCostRow[] = [
-    {
-        key: 'ejerudgift',
-        label: 'Ejerudgift',
-        getValue: () => props.ejerudgift * 12,
-    },
-    { key: 'heating', label: 'Heating', getValue: () => props.heating * 12 },
-    { key: 'water', label: 'Water', getValue: () => props.water * 12 },
-    { key: 'repairs', label: 'Repairs', getValue: () => props.repairs * 12 },
-];
+function getBaseRateForYear(year: number): number {
+    // Get the base rate (without bidragssats) for display in input
+    // We need to subtract the bidragssats from the effective rate
+    const row = props.breakdown.find((r) => r.year === year);
+    if (row) {
+        // The effective rate includes bidragssats, but for the input we want the base rate
+        // We'll just use the overrides or the default base rate
+        if (props.variableRateOverrides[year] !== undefined) {
+            return props.variableRateOverrides[year];
+        }
+        // Find the most recent override before this year
+        const overrideYears = Object.keys(props.variableRateOverrides)
+            .map(Number)
+            .filter((y) => y < year)
+            .sort((a, b) => b - a);
+        if (overrideYears.length > 0) {
+            return props.variableRateOverrides[overrideYears[0]];
+        }
+    }
+    // Default to the base rate from flexibleLoanType
+    return props.flexibleLoanType === 'F3' ? 3.59 : 3.49;
+}
+
+const ownershipCostKeys = [
+    { key: 'ejerudgift', label: 'Ejerudgift' },
+    { key: 'heating', label: 'Heating' },
+    { key: 'water', label: 'Water' },
+    { key: 'repairs', label: 'Repairs' },
+] as const;
 
 const mortgageRows = [
     { key: 'fixedInterest', label: 'Interest - Fixed Loan' },
@@ -49,7 +73,8 @@ const tier1DeductionRate = 0.336;
 const tier2DeductionRate = 0.206;
 
 function calculateInterestDeduction(row: YearlyBreakdown): number {
-    const totalInterest = row.fixedInterest + row.variableInterest + row.bankLoanInterest;
+    const totalInterest =
+        row.fixedInterest + row.variableInterest + row.bankLoanInterest;
     const tier1Deduction =
         Math.min(totalInterest, interestDeductionThreshold) *
         tier1DeductionRate;
@@ -61,10 +86,7 @@ function calculateInterestDeduction(row: YearlyBreakdown): number {
 
 function calculateTotalCost(row: YearlyBreakdown): number {
     const ownershipCosts =
-        props.ejerudgift * 12 +
-        props.heating * 12 +
-        props.water * 12 +
-        props.repairs * 12;
+        row.ejerudgift + row.heating + row.water + row.repairs;
     const mortgageCosts =
         row.fixedInterest +
         row.variableInterest +
@@ -76,33 +98,35 @@ function calculateTotalCost(row: YearlyBreakdown): number {
     return ownershipCosts + mortgageCosts - taxDeductions;
 }
 
-function calculateYearlyRent(): number {
-    return props.rentExpenses * 12;
+function calculateYearlyRent(row: YearlyBreakdown): number {
+    return row.rentExpenses;
 }
 
 function calculateBaseIncomeDelta(row: YearlyBreakdown): number {
-    return calculateYearlyRent() - calculateTotalCost(row);
+    return calculateYearlyRent(row) - calculateTotalCost(row);
 }
 
 function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
-    const totalBalance = row.fixedBalance + row.variableBalance + row.bankLoanBalance;
+    const totalBalance =
+        row.fixedBalance + row.variableBalance + row.bankLoanBalance;
     if (totalBalance <= 0) {
         return 0;
     }
-    const totalInterest = row.fixedInterest + row.variableInterest + row.bankLoanInterest;
+    const totalInterest =
+        row.fixedInterest + row.variableInterest + row.bankLoanInterest;
     const deduction = calculateInterestDeduction(row);
     return ((totalInterest - deduction) / totalBalance) * 100;
 }
 </script>
 
 <template>
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+    <div class="relative overflow-x-scroll">
+        <table class="text-sm">
             <tbody class="divide-y divide-border">
                 <!-- Year Header Row -->
                 <tr class="bg-muted/50">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-muted/50 px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Year
                     </th>
@@ -123,7 +147,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                 <!-- Basic Ownership Costs Section -->
                 <tr class="bg-amber-100 dark:bg-amber-900/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-amber-800 uppercase dark:text-amber-200"
+                        class="sticky left-0 z-10 border-r border-border bg-amber-100 px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-amber-800 uppercase dark:bg-amber-900/30 dark:text-amber-200"
                     >
                         Basic ownership costs
                     </th>
@@ -136,12 +160,12 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                 </tr>
 
                 <tr
-                    v-for="costRow in ownershipCostRows"
+                    v-for="costRow in ownershipCostKeys"
                     :key="costRow.key"
                     class="transition-colors hover:bg-muted/30"
                 >
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         {{ costRow.label }}
                     </th>
@@ -153,14 +177,14 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                         :key="`${costRow.key}-${row.year}`"
                         class="px-3 py-3 text-right whitespace-nowrap text-muted-foreground"
                     >
-                        {{ formatCurrency(costRow.getValue()) }}
+                        {{ formatCurrency(row[costRow.key]) }}
                     </td>
                 </tr>
 
                 <!-- Mortgage Section -->
                 <tr class="bg-blue-100 dark:bg-blue-900/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-blue-800 uppercase dark:text-blue-200"
+                        class="sticky left-0 z-10 border-r border-border bg-blue-100 px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-blue-800 uppercase dark:bg-blue-900/30 dark:text-blue-200"
                     >
                         Mortgage
                     </th>
@@ -178,7 +202,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                     class="transition-colors hover:bg-muted/30"
                 >
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         {{ mortgageRow.label }}
                     </th>
@@ -197,7 +221,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                 <!-- Tax Deductions Section -->
                 <tr class="bg-green-100 dark:bg-green-900/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-green-800 uppercase dark:text-green-200"
+                        class="sticky left-0 z-10 border-r border-border bg-green-100 px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-green-800 uppercase dark:bg-green-900/30 dark:text-green-200"
                     >
                         Tax Deductions
                     </th>
@@ -211,7 +235,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Interest Deductions
                     </th>
@@ -230,7 +254,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                 <!-- Total Costs Section -->
                 <tr class="bg-purple-100 dark:bg-purple-900/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-purple-800 uppercase dark:text-purple-200"
+                        class="sticky left-0 z-10 border-r border-border bg-purple-100 px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-purple-800 uppercase dark:bg-purple-900/30 dark:text-purple-200"
                     >
                         Total Costs
                     </th>
@@ -244,7 +268,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Total Cost
                     </th>
@@ -262,7 +286,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Reference Rent
                     </th>
@@ -274,13 +298,13 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                         :key="`reference-rent-${row.year}`"
                         class="px-3 py-3 text-right whitespace-nowrap text-muted-foreground"
                     >
-                        {{ formatCurrency(calculateYearlyRent()) }}
+                        {{ formatCurrency(calculateYearlyRent(row)) }}
                     </td>
                 </tr>
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Base Income Delta
                     </th>
@@ -305,21 +329,27 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                 <!-- Other Stuff Section -->
                 <tr class="bg-slate-100 dark:bg-slate-900/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-slate-800 uppercase dark:text-slate-200"
+                        class="sticky left-0 z-10 border-r border-border bg-slate-100 px-3 py-3 text-left text-xs font-semibold tracking-wider whitespace-nowrap text-slate-800 uppercase dark:bg-slate-900/30 dark:text-slate-200"
                     >
                         Other stuff
                     </th>
-                    <td class="px-3 py-3"></td>
+                    <td
+                        class="px-3 py-3 text-center text-xs font-semibold text-slate-800 dark:text-slate-200"
+                    >
+                        0
+                    </td>
                     <td
                         v-for="row in breakdown"
                         :key="`other-stuff-header-${row.year}`"
-                        class="px-3 py-3"
-                    ></td>
+                        class="px-3 py-3 text-center text-xs font-semibold text-slate-800 dark:text-slate-200"
+                    >
+                        {{ row.year }}
+                    </td>
                 </tr>
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Fixed Loan Outstanding
                     </th>
@@ -339,7 +369,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Variable Loan Outstanding
                     </th>
@@ -359,7 +389,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Bank Loan Outstanding
                     </th>
@@ -382,7 +412,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                     class="transition-colors hover:bg-muted/30"
                 >
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         {{ flexibleLoanType }} Interest Rate
                     </th>
@@ -394,13 +424,33 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                         :key="`variable-interest-rate-${row.year}`"
                         class="px-3 py-3 text-right whitespace-nowrap text-muted-foreground"
                     >
-                        {{ variableEffectiveRate.toFixed(2) }}%
+                        <template v-if="isEditableYear(row.year)">
+                            <div class="flex flex-col items-end gap-1">
+                                <div>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="20"
+                                        :value="getBaseRateForYear(row.year)"
+                                        class="w-16 rounded border border-input bg-background px-1 py-0.5 text-right text-sm"
+                                        @change="handleRateChange(row.year, $event)"
+                                    />%
+                                </div>
+                                <div class="text-xs text-muted-foreground/70">
+                                    ({{ row.variableRateForYear.toFixed(2) }}%)
+                                </div>
+                            </div>
+                        </template>
+                        <template v-else>
+                            {{ row.variableRateForYear.toFixed(2) }}%
+                        </template>
                     </td>
                 </tr>
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Monthly Cost
                     </th>
@@ -418,7 +468,7 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
 
                 <tr class="transition-colors hover:bg-muted/30">
                     <th
-                        class="border-r border-border px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-background px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Effective Interest Rate
                     </th>

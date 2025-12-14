@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import AmortizationTable from '@/components/AmortizationTable.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import Checkbox from '@/components/ui/checkbox/Checkbox.vue';
 import Input from '@/components/ui/input/Input.vue';
 import Label from '@/components/ui/label/Label.vue';
 import { useMortgageCalculator } from '@/composables/useMortgageCalculator';
@@ -23,12 +22,16 @@ const {
     fixedLoanAmount,
     variableLoanAmount,
     bankLoanAmount,
+    fixedLoanPlusBond,
     fixedBidragssats,
     variableBidragssats,
     fixedEffectiveRate,
     variableEffectiveRate,
     formatCurrency,
     formatNumber,
+    isEditableYear,
+    setVariableRateForYear,
+    variableRateOverrides,
 } = useMortgageCalculator();
 
 const loanPeriodOptions = [10, 20, 30] as const;
@@ -84,7 +87,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                     :model-value="inputs.propertyValue * 0.2"
                                     type="number"
                                     readonly
-                                    class="bg-muted cursor-not-allowed"
+                                    class="cursor-not-allowed bg-muted"
                                 />
                             </div>
                         </CardContent>
@@ -159,7 +162,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <select
                                     id="loanPeriodFixed"
                                     v-model="inputs.loanPeriodFixed"
-                                    class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+                                    class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
                                 >
                                     <option
                                         v-for="period in loanPeriodOptions"
@@ -178,7 +181,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <select
                                     id="loanPeriodVariable"
                                     v-model="inputs.loanPeriodVariable"
-                                    class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+                                    class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
                                 >
                                     <option
                                         v-for="period in loanPeriodOptions"
@@ -205,7 +208,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                     class="h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 accent-primary dark:bg-gray-700"
                                 />
                                 <div
-                                    class="text-muted-foreground flex justify-between text-xs"
+                                    class="flex justify-between text-xs text-muted-foreground"
                                 >
                                     <span>0% Fixed</span>
                                     <span>100% Fixed</span>
@@ -219,7 +222,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <select
                                     id="flexibleLoanType"
                                     v-model="inputs.flexibleLoanType"
-                                    class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+                                    class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
                                 >
                                     <option
                                         v-for="loanType in flexibleLoanTypes"
@@ -236,9 +239,12 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                     id="withRepayments"
                                     v-model="inputs.withRepayments"
                                     type="checkbox"
-                                    class="border-input size-4 rounded border"
+                                    class="size-4 rounded border border-input"
                                 />
-                                <Label for="withRepayments" class="cursor-pointer">
+                                <Label
+                                    for="withRepayments"
+                                    class="cursor-pointer"
+                                >
                                     With Repayments (Annuity)
                                 </Label>
                             </div>
@@ -256,10 +262,16 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 </Label>
                                 <Input
                                     id="bankLoanNeeded"
-                                    :model-value="Math.max(0, inputs.propertyValue * 0.2 - inputs.downpayment)"
+                                    :model-value="
+                                        Math.max(
+                                            0,
+                                            inputs.propertyValue * 0.2 -
+                                                inputs.downpayment,
+                                        )
+                                    "
                                     type="number"
                                     readonly
-                                    class="bg-muted cursor-not-allowed"
+                                    class="cursor-not-allowed bg-muted"
                                 />
                             </div>
 
@@ -375,166 +387,437 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 />
                             </div>
 
-                            <div class="border-border mt-2 border-t pt-4">
-                                <p class="text-muted-foreground mb-3 text-sm font-medium">
+                            <div class="mt-2 border-t border-border pt-4">
+                                <p
+                                    class="mb-3 text-sm font-medium text-muted-foreground"
+                                >
                                     Effective Rates (with Bidragssats)
                                 </p>
                                 <div class="flex flex-col gap-2 text-sm">
                                     <div class="flex justify-between">
-                                        <span class="text-muted-foreground">F30 (Fixed)</span>
+                                        <span class="text-muted-foreground"
+                                            >F30 (Fixed)</span
+                                        >
                                         <span class="font-medium">
-                                            {{ inputs.interestRateF30 }}% + {{ fixedBidragssats }}% = {{ fixedEffectiveRate.toFixed(2) }}%
+                                            {{ inputs.interestRateF30 }}% +
+                                            {{ fixedBidragssats }}% =
+                                            {{ fixedEffectiveRate.toFixed(2) }}%
                                         </span>
                                     </div>
                                     <div class="flex justify-between">
-                                        <span class="text-muted-foreground">{{ inputs.flexibleLoanType }} (Variable)</span>
+                                        <span class="text-muted-foreground"
+                                            >{{
+                                                inputs.flexibleLoanType
+                                            }}
+                                            (Variable)</span
+                                        >
                                         <span class="font-medium">
                                             {{
                                                 inputs.flexibleLoanType === 'F3'
                                                     ? inputs.interestRateF3
                                                     : inputs.interestRateF5
-                                            }}% + {{ variableBidragssats }}% = {{ variableEffectiveRate.toFixed(2) }}%
+                                            }}% + {{ variableBidragssats }}% =
+                                            {{
+                                                variableEffectiveRate.toFixed(
+                                                    2,
+                                                )
+                                            }}%
                                         </span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="border-border mt-2 border-t pt-4">
-                                <p class="text-muted-foreground mb-3 text-sm font-medium">
+                            <div class="mt-2 border-t border-border pt-4">
+                                <p
+                                    class="mb-3 text-sm font-medium text-muted-foreground"
+                                >
                                     Bidragssats Reference
                                 </p>
                                 <table class="w-full text-xs">
                                     <thead>
-                                        <tr class="text-muted-foreground border-b">
-                                            <th class="pb-2 text-left font-medium">Type</th>
-                                            <th class="pb-2 text-right font-medium">w/ Repay</th>
-                                            <th class="pb-2 text-right font-medium">No Repay</th>
+                                        <tr
+                                            class="border-b text-muted-foreground"
+                                        >
+                                            <th
+                                                class="pb-2 text-left font-medium"
+                                            >
+                                                Type
+                                            </th>
+                                            <th
+                                                class="pb-2 text-right font-medium"
+                                            >
+                                                w/ Repay
+                                            </th>
+                                            <th
+                                                class="pb-2 text-right font-medium"
+                                            >
+                                                No Repay
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody class="text-muted-foreground">
                                         <tr>
                                             <td class="py-1">F3</td>
-                                            <td class="py-1 text-right">+1.05%</td>
-                                            <td class="py-1 text-right">+1.38%</td>
+                                            <td class="py-1 text-right">
+                                                +1.05%
+                                            </td>
+                                            <td class="py-1 text-right">
+                                                +1.38%
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td class="py-1">F5</td>
-                                            <td class="py-1 text-right">+0.85%</td>
-                                            <td class="py-1 text-right">+0.77%</td>
+                                            <td class="py-1 text-right">
+                                                +0.85%
+                                            </td>
+                                            <td class="py-1 text-right">
+                                                +0.77%
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td class="py-1">F30</td>
-                                            <td class="py-1 text-right">+0.68%</td>
-                                            <td class="py-1 text-right">+1.57%</td>
+                                            <td class="py-1 text-right">
+                                                +0.68%
+                                            </td>
+                                            <td class="py-1 text-right">
+                                                +1.57%
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Mortgage and Bonds</CardTitle>
+                        </CardHeader>
+                        <CardContent class="flex flex-col gap-4">
+                            <div class="flex flex-col gap-2">
+                                <Label for="mortgageRequired">
+                                    Mortgage Required (DKK)
+                                </Label>
+                                <Input
+                                    id="mortgageRequired"
+                                    :model-value="summary.totalLoanAmount"
+                                    type="number"
+                                    readonly
+                                    class="cursor-not-allowed bg-muted"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="f30NoRepay">
+                                    F30 No Repay (%)
+                                </Label>
+                                <Input
+                                    id="f30NoRepay"
+                                    v-model="inputs.f30NoRepay"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="f30WithRepay">
+                                    F30 w/ Repay (%)
+                                </Label>
+                                <Input
+                                    id="f30WithRepay"
+                                    v-model="inputs.f30WithRepay"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                />
+                            </div>
+
+                            <div class="mt-2 border-t border-border pt-4">
+                                <p
+                                    class="mb-3 text-sm font-medium text-muted-foreground"
+                                >
+                                    Interest Rate Split
+                                </p>
+                                <div class="flex flex-col gap-3">
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="mortgageF30">
+                                            Mortgage - F30 (DKK)
+                                        </Label>
+                                        <Input
+                                            id="mortgageF30"
+                                            :model-value="fixedLoanAmount"
+                                            type="number"
+                                            readonly
+                                            class="cursor-not-allowed bg-muted"
+                                        />
+                                    </div>
+
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="mortgageF3F5">
+                                            Mortgage - F3/F5 (DKK)
+                                        </Label>
+                                        <Input
+                                            id="mortgageF3F5"
+                                            :model-value="variableLoanAmount"
+                                            type="number"
+                                            readonly
+                                            class="cursor-not-allowed bg-muted"
+                                        />
+                                    </div>
+
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="mortgageF30PlusBond">
+                                            Mortgage - F30 plus bond (DKK)
+                                        </Label>
+                                        <Input
+                                            id="mortgageF30PlusBond"
+                                            :model-value="fixedLoanPlusBond"
+                                            type="number"
+                                            readonly
+                                            class="cursor-not-allowed bg-muted"
+                                        />
+                                    </div>
+
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="totalMortgage">
+                                            Total Mortgage (DKK)
+                                        </Label>
+                                        <Input
+                                            id="totalMortgage"
+                                            :model-value="
+                                                fixedLoanPlusBond +
+                                                variableLoanAmount
+                                            "
+                                            type="number"
+                                            readonly
+                                            class="cursor-not-allowed bg-muted"
+                                        />
+                                    </div>
+
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="extraBondPayment">
+                                            Extra Bond Payment (DKK)
+                                        </Label>
+                                        <Input
+                                            id="extraBondPayment"
+                                            :model-value="
+                                                fixedLoanPlusBond -
+                                                fixedLoanAmount
+                                            "
+                                            type="number"
+                                            readonly
+                                            class="cursor-not-allowed bg-muted"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle
+                                >Inflation - Yearly Adjustments</CardTitle
+                            >
+                        </CardHeader>
+                        <CardContent class="flex flex-col gap-4">
+                            <div class="flex flex-col gap-2">
+                                <Label for="inflationEjerudgift">
+                                    Ejerudgift (%)
+                                </Label>
+                                <Input
+                                    id="inflationEjerudgift"
+                                    v-model="inputs.inflationEjerudgift"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="inflationHeating">
+                                    Heating (%)
+                                </Label>
+                                <Input
+                                    id="inflationHeating"
+                                    v-model="inputs.inflationHeating"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="inflationWater"> Water (%) </Label>
+                                <Input
+                                    id="inflationWater"
+                                    v-model="inputs.inflationWater"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="inflationRepairs">
+                                    Repairs (%)
+                                </Label>
+                                <Input
+                                    id="inflationRepairs"
+                                    v-model="inputs.inflationRepairs"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                />
+                            </div>
+
+                            <div class="flex flex-col gap-2">
+                                <Label for="inflationRent"> Rent (%) </Label>
+                                <Input
+                                    id="inflationRent"
+                                    v-model="inputs.inflationRent"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <div class="flex flex-col gap-6">
-                    <Card>
+                    <Card class="max-w-7xl">
                         <CardHeader>
                             <CardTitle>Loan Summary</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <div
+                                class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                            >
                                 <div
-                                    class="bg-muted/50 flex flex-col gap-1 rounded-lg p-4"
+                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
                                 >
-                                    <span
-                                        class="text-muted-foreground text-sm"
-                                    >
+                                    <span class="text-sm text-muted-foreground">
                                         Total Loan Amount
                                     </span>
                                     <span class="text-xl font-semibold">
-                                        {{ formatCurrency(summary.totalLoanAmount) }}
+                                        {{
+                                            formatCurrency(
+                                                fixedLoanPlusBond + variableLoanAmount,
+                                            )
+                                        }}
                                     </span>
                                 </div>
                                 <div
-                                    class="bg-muted/50 flex flex-col gap-1 rounded-lg p-4"
+                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
                                 >
-                                    <span
-                                        class="text-muted-foreground text-sm"
-                                    >
+                                    <span class="text-sm text-muted-foreground">
                                         Fixed Loan (F30)
                                     </span>
                                     <span class="text-xl font-semibold">
-                                        {{ formatCurrency(summary.fixedLoanAmount) }}
+                                        {{
+                                            formatCurrency(
+                                                fixedLoanPlusBond,
+                                            )
+                                        }}
                                     </span>
-                                    <span class="text-muted-foreground text-xs">
-                                        {{ inputs.interestRateF30 }}% + {{ fixedBidragssats }}% bidrag = {{ fixedEffectiveRate.toFixed(2) }}%
+                                    <span class="text-xs text-muted-foreground">
+                                        {{ inputs.interestRateF30 }}% +
+                                        {{ fixedBidragssats }}% bidrag =
+                                        {{ fixedEffectiveRate.toFixed(2) }}%
                                     </span>
                                 </div>
                                 <div
-                                    class="bg-muted/50 flex flex-col gap-1 rounded-lg p-4"
+                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
                                 >
-                                    <span
-                                        class="text-muted-foreground text-sm"
-                                    >
-                                        Variable Loan ({{ inputs.flexibleLoanType }})
+                                    <span class="text-sm text-muted-foreground">
+                                        Variable Loan ({{
+                                            inputs.flexibleLoanType
+                                        }})
                                     </span>
                                     <span class="text-xl font-semibold">
-                                        {{ formatCurrency(summary.variableLoanAmount) }}
+                                        {{
+                                            formatCurrency(
+                                                summary.variableLoanAmount,
+                                            )
+                                        }}
                                     </span>
-                                    <span class="text-muted-foreground text-xs">
+                                    <span class="text-xs text-muted-foreground">
                                         {{
                                             inputs.flexibleLoanType === 'F3'
                                                 ? inputs.interestRateF3
                                                 : inputs.interestRateF5
-                                        }}% + {{ variableBidragssats }}% bidrag = {{ variableEffectiveRate.toFixed(2) }}%
+                                        }}% + {{ variableBidragssats }}% bidrag
+                                        =
+                                        {{ variableEffectiveRate.toFixed(2) }}%
                                     </span>
                                 </div>
                                 <div
-                                    class="bg-muted/50 flex flex-col gap-1 rounded-lg p-4"
+                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
                                 >
-                                    <span
-                                        class="text-muted-foreground text-sm"
-                                    >
+                                    <span class="text-sm text-muted-foreground">
                                         Total Interest Paid
                                     </span>
                                     <span class="text-xl font-semibold">
-                                        {{ formatCurrency(summary.totalInterestPaid) }}
+                                        {{
+                                            formatCurrency(
+                                                summary.totalInterestPaid,
+                                            )
+                                        }}
                                     </span>
                                 </div>
                                 <div
-                                    class="bg-muted/50 flex flex-col gap-1 rounded-lg p-4"
+                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
                                 >
-                                    <span
-                                        class="text-muted-foreground text-sm"
-                                    >
+                                    <span class="text-sm text-muted-foreground">
                                         Total Amount Paid
                                     </span>
                                     <span class="text-xl font-semibold">
-                                        {{ formatCurrency(summary.totalAmountPaid) }}
+                                        {{
+                                            formatCurrency(
+                                                summary.totalAmountPaid,
+                                            )
+                                        }}
                                     </span>
                                 </div>
                                 <div
-                                    class="bg-muted/50 flex flex-col gap-1 rounded-lg p-4"
+                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
                                 >
-                                    <span
-                                        class="text-muted-foreground text-sm"
-                                    >
+                                    <span class="text-sm text-muted-foreground">
                                         Monthly Utilities
                                     </span>
                                     <span class="text-xl font-semibold">
-                                        {{ formatCurrency(summary.monthlyUtilities) }}
+                                        {{
+                                            formatCurrency(
+                                                summary.monthlyUtilities,
+                                            )
+                                        }}
                                     </span>
                                 </div>
                                 <div
-                                    class="bg-primary/10 flex flex-col gap-1 rounded-lg p-4 sm:col-span-2 lg:col-span-3"
+                                    class="flex flex-col gap-1 rounded-lg bg-primary/10 p-4 sm:col-span-2 lg:col-span-3"
                                 >
-                                    <span
-                                        class="text-muted-foreground text-sm"
-                                    >
+                                    <span class="text-sm text-muted-foreground">
                                         Average Monthly Housing Cost
                                     </span>
-                                    <span class="text-primary text-2xl font-bold">
-                                        {{ formatCurrency(summary.averageMonthlyHousingCost) }}
+                                    <span
+                                        class="text-2xl font-bold text-primary"
+                                    >
+                                        {{
+                                            formatCurrency(
+                                                summary.averageMonthlyHousingCost,
+                                            )
+                                        }}
                                     </span>
-                                    <span class="text-muted-foreground text-xs">
+                                    <span class="text-xs text-muted-foreground">
                                         Mortgage payment + utilities
                                     </span>
                                 </div>
@@ -546,7 +829,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                         <CardHeader>
                             <CardTitle>Amortization Schedule</CardTitle>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent class="overflow-x-hidden p-0">
                             <AmortizationTable
                                 :breakdown="yearlyBreakdown"
                                 :format-currency="formatCurrency"
@@ -558,10 +841,15 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 :rent-expenses="inputs.rentExpenses"
                                 :variable-effective-rate="variableEffectiveRate"
                                 :flexible-loan-type="inputs.flexibleLoanType"
-                                :has-variable-loan="inputs.fixedMortgagePercentage < 100"
-                                :initial-fixed-balance="fixedLoanAmount"
+                                :has-variable-loan="
+                                    inputs.fixedMortgagePercentage < 100
+                                "
+                                :initial-fixed-balance="fixedLoanPlusBond"
                                 :initial-variable-balance="variableLoanAmount"
                                 :initial-bank-loan-balance="bankLoanAmount"
+                                :is-editable-year="isEditableYear"
+                                :set-variable-rate-for-year="setVariableRateForYear"
+                                :variable-rate-overrides="variableRateOverrides"
                             />
                         </CardContent>
                     </Card>
@@ -569,7 +857,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                     <Card v-else>
                         <CardContent class="py-12">
                             <p
-                                class="text-muted-foreground text-center text-sm"
+                                class="text-center text-sm text-muted-foreground"
                             >
                                 Enter property value and downpayment to see the
                                 amortization schedule.
