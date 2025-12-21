@@ -416,6 +416,84 @@ export function useMortgageCalculator() {
 
     function resetInputs() {
         Object.assign(inputs, defaultInputs);
+        Object.keys(variableRateOverrides).forEach(
+            (key) => delete variableRateOverrides[Number(key)],
+        );
+    }
+
+    function exportData() {
+        return {
+            property_value: inputs.propertyValue,
+            downpayment: inputs.downpayment,
+            ejerudgift: inputs.ejerudgift,
+            heating: inputs.heating,
+            water: inputs.water,
+            repairs: inputs.repairs,
+            rent_expenses: inputs.rentExpenses,
+            loan_period_fixed: inputs.loanPeriodFixed,
+            loan_period_variable: inputs.loanPeriodVariable,
+            fixed_mortgage_percentage: inputs.fixedMortgagePercentage,
+            flexible_loan_type: inputs.flexibleLoanType,
+            with_repayments: inputs.withRepayments,
+            bank_loan_interest: inputs.bankLoanInterest,
+            bank_loan_period: inputs.bankLoanPeriod,
+            interest_rate_f3: inputs.interestRateF3,
+            interest_rate_f5: inputs.interestRateF5,
+            interest_rate_f30: inputs.interestRateF30,
+            bidragssats_adjustment: inputs.bidragssatsAdjustment,
+            f30_no_repay: inputs.f30NoRepay,
+            f30_with_repay: inputs.f30WithRepay,
+            inflation_ejerudgift: inputs.inflationEjerudgift,
+            inflation_heating: inputs.inflationHeating,
+            inflation_water: inputs.inflationWater,
+            inflation_repairs: inputs.inflationRepairs,
+            inflation_rent: inputs.inflationRent,
+            variable_rate_overrides:
+                Object.keys(variableRateOverrides).length > 0
+                    ? variableRateOverrides
+                    : null,
+        };
+    }
+
+    function loadFromData(data: Record<string, unknown>) {
+        inputs.propertyValue = Number(data.property_value) || defaultInputs.propertyValue;
+        inputs.downpayment = Number(data.downpayment) || defaultInputs.downpayment;
+        inputs.ejerudgift = Number(data.ejerudgift) || defaultInputs.ejerudgift;
+        inputs.heating = Number(data.heating) || defaultInputs.heating;
+        inputs.water = Number(data.water) || defaultInputs.water;
+        inputs.repairs = Number(data.repairs) || defaultInputs.repairs;
+        inputs.rentExpenses = Number(data.rent_expenses) || defaultInputs.rentExpenses;
+        inputs.loanPeriodFixed = (Number(data.loan_period_fixed) || defaultInputs.loanPeriodFixed) as LoanPeriod;
+        inputs.loanPeriodVariable = (Number(data.loan_period_variable) || defaultInputs.loanPeriodVariable) as LoanPeriod;
+        inputs.fixedMortgagePercentage = Number(data.fixed_mortgage_percentage) ?? defaultInputs.fixedMortgagePercentage;
+        inputs.flexibleLoanType = (data.flexible_loan_type as FlexibleLoanType) || defaultInputs.flexibleLoanType;
+        inputs.withRepayments = Boolean(data.with_repayments);
+        inputs.bankLoanInterest = Number(data.bank_loan_interest) || defaultInputs.bankLoanInterest;
+        inputs.bankLoanPeriod = Number(data.bank_loan_period) || defaultInputs.bankLoanPeriod;
+        inputs.interestRateF3 = Number(data.interest_rate_f3) || defaultInputs.interestRateF3;
+        inputs.interestRateF5 = Number(data.interest_rate_f5) || defaultInputs.interestRateF5;
+        inputs.interestRateF30 = Number(data.interest_rate_f30) || defaultInputs.interestRateF30;
+        inputs.bidragssatsAdjustment = Number(data.bidragssats_adjustment) ?? defaultInputs.bidragssatsAdjustment;
+        inputs.f30NoRepay = Number(data.f30_no_repay) || defaultInputs.f30NoRepay;
+        inputs.f30WithRepay = Number(data.f30_with_repay) || defaultInputs.f30WithRepay;
+        inputs.inflationEjerudgift = Number(data.inflation_ejerudgift) || defaultInputs.inflationEjerudgift;
+        inputs.inflationHeating = Number(data.inflation_heating) || defaultInputs.inflationHeating;
+        inputs.inflationWater = Number(data.inflation_water) || defaultInputs.inflationWater;
+        inputs.inflationRepairs = Number(data.inflation_repairs) || defaultInputs.inflationRepairs;
+        inputs.inflationRent = Number(data.inflation_rent) || defaultInputs.inflationRent;
+
+        // Clear existing overrides
+        Object.keys(variableRateOverrides).forEach(
+            (key) => delete variableRateOverrides[Number(key)],
+        );
+
+        // Load saved overrides
+        if (data.variable_rate_overrides && typeof data.variable_rate_overrides === 'object') {
+            const overrides = data.variable_rate_overrides as Record<string, number>;
+            Object.entries(overrides).forEach(([year, rate]) => {
+                variableRateOverrides[Number(year)] = Number(rate);
+            });
+        }
     }
 
     return {
@@ -439,5 +517,7 @@ export function useMortgageCalculator() {
         isEditableYear,
         setVariableRateForYear,
         variableRateOverrides,
+        exportData,
+        loadFromData,
     };
 }

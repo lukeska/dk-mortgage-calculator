@@ -1,12 +1,28 @@
 <script setup lang="ts">
+import {
+    store as storeMortgage,
+    update as updateMortgage,
+} from '@/actions/App/Http/Controllers/MortgageController';
 import AmortizationTable from '@/components/AmortizationTable.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import CurrencyInput from '@/components/ui/input/CurrencyInput.vue';
 import Input from '@/components/ui/input/Input.vue';
 import Label from '@/components/ui/label/Label.vue';
 import { useMortgageCalculator } from '@/composables/useMortgageCalculator';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
+
+interface MortgageData {
+    id: number;
+    name: string;
+    [key: string]: unknown;
+}
+
+const props = defineProps<{
+    mortgage?: MortgageData;
+}>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -32,10 +48,90 @@ const {
     isEditableYear,
     setVariableRateForYear,
     variableRateOverrides,
+    exportData,
+    loadFromData,
 } = useMortgageCalculator();
 
 const loanPeriodOptions = [10, 20, 30] as const;
 const flexibleLoanTypes = ['F3', 'F5'] as const;
+
+const page = usePage();
+const isAuthenticated = computed(() => !!page.props.auth?.user);
+
+const currentMortgageId = ref<number | null>(null);
+const saveName = ref('');
+const showSaveModal = ref(false);
+const isSaving = ref(false);
+
+async function saveConfiguration() {
+    if (!saveName.value.trim()) return;
+    isSaving.value = true;
+
+    try {
+        const data = {
+            name: saveName.value.trim(),
+            ...exportData(),
+        };
+
+        let response;
+        if (currentMortgageId.value) {
+            response = await fetch(
+                updateMortgage.url(currentMortgageId.value),
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-XSRF-TOKEN': getCsrfToken(),
+                    },
+                    body: JSON.stringify(data),
+                },
+            );
+        } else {
+            response = await fetch(storeMortgage.url(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-XSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify(data),
+            });
+        }
+
+        if (response.ok) {
+            const mortgage = await response.json();
+            showSaveModal.value = false;
+
+            // Navigate to the mortgage-simulation page for new configurations
+            if (!currentMortgageId.value) {
+                router.visit(`/mortgage-simulation/${mortgage.id}`);
+            } else {
+                currentMortgageId.value = mortgage.id;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to save mortgage:', error);
+    } finally {
+        isSaving.value = false;
+    }
+}
+
+function newConfiguration() {
+    router.visit('/calculator');
+}
+
+function getCsrfToken(): string {
+    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
+onMounted(() => {
+    // Load mortgage from prop if provided (from /mortgage-simulation/{id} route)
+    if (props.mortgage) {
+        loadFromData(props.mortgage);
+        currentMortgageId.value = props.mortgage.id;
+        saveName.value = props.mortgage.name;
+    }
+});
 </script>
 
 <template>
@@ -45,6 +141,77 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
         <div class="flex h-full flex-1 flex-col gap-6 p-4 lg:p-6">
             <div class="grid gap-6 lg:grid-cols-[400px_1fr]">
                 <div class="flex flex-col gap-6">
+                    <!-- Save/Load Configuration -->
+                    <Card v-if="isAuthenticated">
+                        <CardHeader>
+                            <CardTitle>{{
+                                saveName || 'New Calculation'
+                            }}</CardTitle>
+                        </CardHeader>
+                        <CardContent class="flex flex-col gap-4">
+                            <div class="flex gap-2">
+                                <button
+                                    class="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                                    @click="showSaveModal = true"
+                                >
+                                    {{
+                                        currentMortgageId
+                                            ? 'Save Changes'
+                                            : 'Save Configuration'
+                                    }}
+                                </button>
+                                <button
+                                    class="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                                    @click="newConfiguration"
+                                >
+                                    New
+                                </button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Save Modal -->
+                    <div
+                        v-if="showSaveModal"
+                        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                        @click.self="showSaveModal = false"
+                    >
+                        <div
+                            class="w-full max-w-md rounded-lg bg-background p-6 shadow-lg"
+                        >
+                            <h3 class="mb-4 text-lg font-semibold">
+                                Save Configuration
+                            </h3>
+                            <div class="mb-4 flex flex-col gap-2">
+                                <Label for="configName"
+                                    >Configuration Name</Label
+                                >
+                                <Input
+                                    id="configName"
+                                    v-model="saveName"
+                                    type="text"
+                                    placeholder="e.g., House in Copenhagen"
+                                    @keyup.enter="saveConfiguration"
+                                />
+                            </div>
+                            <div class="flex justify-end gap-2">
+                                <button
+                                    class="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                                    @click="showSaveModal = false"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                    :disabled="!saveName.trim() || isSaving"
+                                    @click="saveConfiguration"
+                                >
+                                    {{ isSaving ? 'Saving...' : 'Save' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <Card>
                         <CardHeader>
                             <CardTitle>Property Details</CardTitle>
@@ -54,13 +221,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <Label for="propertyValue">
                                     Property Value (DKK)
                                 </Label>
-                                <Input
+                                <CurrencyInput
                                     id="propertyValue"
                                     v-model="inputs.propertyValue"
-                                    type="number"
-                                    min="0"
-                                    step="10000"
-                                    placeholder="e.g. 3000000"
                                 />
                             </div>
 
@@ -68,13 +231,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <Label for="downpayment">
                                     Your Downpayment (DKK)
                                 </Label>
-                                <Input
+                                <CurrencyInput
                                     id="downpayment"
                                     v-model="inputs.downpayment"
-                                    type="number"
-                                    min="0"
-                                    step="10000"
-                                    placeholder="e.g. 150000"
                                 />
                             </div>
 
@@ -82,10 +241,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <Label for="capitalNeeded">
                                     Capital Needed (DKK)
                                 </Label>
-                                <Input
+                                <CurrencyInput
                                     id="capitalNeeded"
                                     :model-value="inputs.propertyValue * 0.2"
-                                    type="number"
                                     readonly
                                     class="cursor-not-allowed bg-muted"
                                 />
@@ -102,49 +260,33 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <Label for="ejerudgift">
                                     Ejerudgift (DKK/month)
                                 </Label>
-                                <Input
+                                <CurrencyInput
                                     id="ejerudgift"
                                     v-model="inputs.ejerudgift"
-                                    type="number"
-                                    min="0"
-                                    step="100"
-                                    placeholder="e.g. 2500"
                                 />
                             </div>
 
                             <div class="flex flex-col gap-2">
                                 <Label for="heating">Heating (DKK/month)</Label>
-                                <Input
+                                <CurrencyInput
                                     id="heating"
                                     v-model="inputs.heating"
-                                    type="number"
-                                    min="0"
-                                    step="100"
-                                    placeholder="e.g. 500"
                                 />
                             </div>
 
                             <div class="flex flex-col gap-2">
                                 <Label for="water">Water (DKK/month)</Label>
-                                <Input
+                                <CurrencyInput
                                     id="water"
                                     v-model="inputs.water"
-                                    type="number"
-                                    min="0"
-                                    step="100"
-                                    placeholder="e.g. 200"
                                 />
                             </div>
 
                             <div class="flex flex-col gap-2">
                                 <Label for="repairs">Repairs (DKK/month)</Label>
-                                <Input
+                                <CurrencyInput
                                     id="repairs"
                                     v-model="inputs.repairs"
-                                    type="number"
-                                    min="0"
-                                    step="100"
-                                    placeholder="e.g. 500"
                                 />
                             </div>
                         </CardContent>
@@ -260,7 +402,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <Label for="bankLoanNeeded">
                                     Bank Loan Needed (DKK)
                                 </Label>
-                                <Input
+                                <CurrencyInput
                                     id="bankLoanNeeded"
                                     :model-value="
                                         Math.max(
@@ -269,7 +411,6 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                                 inputs.downpayment,
                                         )
                                     "
-                                    type="number"
                                     readonly
                                     class="cursor-not-allowed bg-muted"
                                 />
@@ -314,13 +455,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <Label for="rentExpenses">
                                     Rent + expenses (DKK/month)
                                 </Label>
-                                <Input
+                                <CurrencyInput
                                     id="rentExpenses"
                                     v-model="inputs.rentExpenses"
-                                    type="number"
-                                    min="0"
-                                    step="100"
-                                    placeholder="e.g. 15000"
                                 />
                             </div>
                         </CardContent>
@@ -498,10 +635,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 <Label for="mortgageRequired">
                                     Mortgage Required (DKK)
                                 </Label>
-                                <Input
+                                <CurrencyInput
                                     id="mortgageRequired"
                                     :model-value="summary.totalLoanAmount"
-                                    type="number"
                                     readonly
                                     class="cursor-not-allowed bg-muted"
                                 />
@@ -546,10 +682,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         <Label for="mortgageF30">
                                             Mortgage - F30 (DKK)
                                         </Label>
-                                        <Input
+                                        <CurrencyInput
                                             id="mortgageF30"
                                             :model-value="fixedLoanAmount"
-                                            type="number"
                                             readonly
                                             class="cursor-not-allowed bg-muted"
                                         />
@@ -559,10 +694,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         <Label for="mortgageF3F5">
                                             Mortgage - F3/F5 (DKK)
                                         </Label>
-                                        <Input
+                                        <CurrencyInput
                                             id="mortgageF3F5"
                                             :model-value="variableLoanAmount"
-                                            type="number"
                                             readonly
                                             class="cursor-not-allowed bg-muted"
                                         />
@@ -572,10 +706,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         <Label for="mortgageF30PlusBond">
                                             Mortgage - F30 plus bond (DKK)
                                         </Label>
-                                        <Input
+                                        <CurrencyInput
                                             id="mortgageF30PlusBond"
                                             :model-value="fixedLoanPlusBond"
-                                            type="number"
                                             readonly
                                             class="cursor-not-allowed bg-muted"
                                         />
@@ -585,13 +718,12 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         <Label for="totalMortgage">
                                             Total Mortgage (DKK)
                                         </Label>
-                                        <Input
+                                        <CurrencyInput
                                             id="totalMortgage"
                                             :model-value="
                                                 fixedLoanPlusBond +
                                                 variableLoanAmount
                                             "
-                                            type="number"
                                             readonly
                                             class="cursor-not-allowed bg-muted"
                                         />
@@ -601,13 +733,12 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         <Label for="extraBondPayment">
                                             Extra Bond Payment (DKK)
                                         </Label>
-                                        <Input
+                                        <CurrencyInput
                                             id="extraBondPayment"
                                             :model-value="
                                                 fixedLoanPlusBond -
                                                 fixedLoanAmount
                                             "
-                                            type="number"
                                             readonly
                                             class="cursor-not-allowed bg-muted"
                                         />
@@ -711,7 +842,8 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                     <span class="text-xl font-semibold">
                                         {{
                                             formatCurrency(
-                                                fixedLoanPlusBond + variableLoanAmount,
+                                                fixedLoanPlusBond +
+                                                    variableLoanAmount,
                                             )
                                         }}
                                     </span>
@@ -723,11 +855,7 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                         Fixed Loan (F30)
                                     </span>
                                     <span class="text-xl font-semibold">
-                                        {{
-                                            formatCurrency(
-                                                fixedLoanPlusBond,
-                                            )
-                                        }}
+                                        {{ formatCurrency(fixedLoanPlusBond) }}
                                     </span>
                                     <span class="text-xs text-muted-foreground">
                                         {{ inputs.interestRateF30 }}% +
@@ -848,7 +976,9 @@ const flexibleLoanTypes = ['F3', 'F5'] as const;
                                 :initial-variable-balance="variableLoanAmount"
                                 :initial-bank-loan-balance="bankLoanAmount"
                                 :is-editable-year="isEditableYear"
-                                :set-variable-rate-for-year="setVariableRateForYear"
+                                :set-variable-rate-for-year="
+                                    setVariableRateForYear
+                                "
                                 :variable-rate-overrides="variableRateOverrides"
                             />
                         </CardContent>
