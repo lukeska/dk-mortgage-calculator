@@ -20,9 +20,19 @@ interface MortgageData {
     [key: string]: unknown;
 }
 
+interface ExchangeRate {
+    id: number;
+    currency_code: string;
+    currency_name: string;
+    rate: string;
+}
+
 const props = defineProps<{
     mortgage?: MortgageData;
+    exchangeRates?: ExchangeRate[];
 }>();
+
+const selectedCurrency = ref('DKK');
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -43,7 +53,7 @@ const {
     variableBidragssats,
     fixedEffectiveRate,
     variableEffectiveRate,
-    formatCurrency,
+    formatCurrency: formatCurrencyDKK,
     formatNumber,
     isEditableYear,
     setVariableRateForYear,
@@ -51,6 +61,26 @@ const {
     exportData,
     loadFromData,
 } = useMortgageCalculator();
+
+const currentExchangeRate = computed(() => {
+    if (selectedCurrency.value === 'DKK') {
+        return 1;
+    }
+    const rate = props.exchangeRates?.find(
+        (r) => r.currency_code === selectedCurrency.value,
+    );
+    return rate ? parseFloat(rate.rate) : 1;
+});
+
+function formatCurrency(value: number): string {
+    const convertedValue = value * currentExchangeRate.value;
+    return new Intl.NumberFormat('da-DK', {
+        style: 'currency',
+        currency: selectedCurrency.value,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(convertedValue);
+}
 
 const loanPeriodOptions = [10, 20, 30] as const;
 const flexibleLoanTypes = ['F3', 'F5'] as const;
@@ -138,7 +168,9 @@ onMounted(() => {
     <Head title="Mortgage Calculator" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex h-full flex-1 flex-col gap-6 p-4 lg:p-6">
+        <div
+            class="flex h-full flex-1 flex-col gap-6 overflow-hidden p-4 lg:p-6"
+        >
             <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
                 <div class="flex flex-col gap-6">
                     <!-- Save/Load Configuration -->
@@ -825,9 +857,39 @@ onMounted(() => {
                 </div>
 
                 <div class="flex flex-col gap-6">
-                    <Card class="max-w-7xl">
-                        <CardHeader>
+                    <Card class="max-w-6xl">
+                        <CardHeader
+                            class="flex flex-row items-center justify-between"
+                        >
                             <CardTitle>Loan Summary</CardTitle>
+                            <div
+                                v-if="exchangeRates && exchangeRates.length > 0"
+                                class="flex items-center gap-2"
+                            >
+                                <Label
+                                    for="currencySelect"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    Display in:
+                                </Label>
+                                <select
+                                    id="currencySelect"
+                                    v-model="selectedCurrency"
+                                    class="h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm ring-offset-background focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/30"
+                                >
+                                    <option value="DKK">
+                                        DKK - Danish Krone
+                                    </option>
+                                    <option
+                                        v-for="rate in exchangeRates"
+                                        :key="rate.id"
+                                        :value="rate.currency_code"
+                                    >
+                                        {{ rate.currency_code }} -
+                                        {{ rate.currency_name }}
+                                    </option>
+                                </select>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div
@@ -957,7 +1019,7 @@ onMounted(() => {
                         <CardHeader>
                             <CardTitle>Amortization Schedule</CardTitle>
                         </CardHeader>
-                        <CardContent class="overflow-x-hidden p-0">
+                        <CardContent class="w-full overflow-hidden p-0">
                             <AmortizationTable
                                 :breakdown="yearlyBreakdown"
                                 :format-currency="formatCurrency"

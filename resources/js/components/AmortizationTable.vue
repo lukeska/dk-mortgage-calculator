@@ -106,7 +106,15 @@ function calculateBaseIncomeDelta(row: YearlyBreakdown): number {
     return calculateYearlyRent(row) - calculateTotalCost(row);
 }
 
-function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
+function calculateEffectiveInterestRate(
+    row: YearlyBreakdown,
+    index: number,
+): number {
+    const isLastYear = index === props.breakdown.length - 1;
+    if (isLastYear) {
+        return 0;
+    }
+
     const totalBalance =
         row.fixedBalance + row.variableBalance + row.bankLoanBalance;
     if (totalBalance <= 0) {
@@ -476,11 +484,13 @@ function calculateEffectiveInterestRate(row: YearlyBreakdown): number {
                         class="px-3 py-3 text-right whitespace-nowrap text-muted-foreground"
                     ></td>
                     <td
-                        v-for="row in breakdown"
+                        v-for="(row, index) in breakdown"
                         :key="`effective-interest-rate-${row.year}`"
                         class="px-3 py-3 text-right whitespace-nowrap text-muted-foreground"
                     >
-                        {{ calculateEffectiveInterestRate(row).toFixed(2) }}%
+                        {{
+                            calculateEffectiveInterestRate(row, index).toFixed(2)
+                        }}%
                     </td>
                 </tr>
             </tbody>
