@@ -139,7 +139,7 @@ onMounted(() => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 lg:p-6">
-            <div class="grid gap-6 lg:grid-cols-[400px_1fr]">
+            <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
                 <div class="flex flex-col gap-6">
                     <!-- Save/Load Configuration -->
                     <Card v-if="isAuthenticated">
