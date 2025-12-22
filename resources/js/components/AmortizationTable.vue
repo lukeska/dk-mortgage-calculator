@@ -134,7 +134,7 @@ function calculateEffectiveInterestRate(
                 <!-- Year Header Row -->
                 <tr class="bg-muted/50">
                     <th
-                        class="sticky left-0 z-10 border-r border-border bg-muted/50 px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
+                        class="sticky left-0 z-10 border-r border-border bg-muted px-3 py-3 text-left text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                     >
                         Year
                     </th>
@@ -442,7 +442,9 @@ function calculateEffectiveInterestRate(
                                         max="20"
                                         :value="getBaseRateForYear(row.year)"
                                         class="w-16 rounded border border-input bg-background px-1 py-0.5 text-right text-sm"
-                                        @change="handleRateChange(row.year, $event)"
+                                        @change="
+                                            handleRateChange(row.year, $event)
+                                        "
                                     />%
                                 </div>
                                 <div class="text-xs text-muted-foreground/70">
@@ -489,7 +491,9 @@ function calculateEffectiveInterestRate(
                         class="px-3 py-3 text-right whitespace-nowrap text-muted-foreground"
                     >
                         {{
-                            calculateEffectiveInterestRate(row, index).toFixed(2)
+                            calculateEffectiveInterestRate(row, index).toFixed(
+                                2,
+                            )
                         }}%
                     </td>
                 </tr>

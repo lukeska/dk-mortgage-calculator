@@ -168,9 +168,7 @@ onMounted(() => {
     <Head title="Mortgage Calculator" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div
-            class="flex h-full flex-1 flex-col gap-6 overflow-hidden p-4 lg:p-6"
-        >
+        <div class="flex h-full flex-1 flex-col gap-6 p-4 lg:p-6">
             <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
                 <div class="flex flex-col gap-6">
                     <!-- Save/Load Configuration -->
@@ -857,7 +855,7 @@ onMounted(() => {
                 </div>
 
                 <div class="flex flex-col gap-6">
-                    <Card class="max-w-6xl">
+                    <Card class="">
                         <CardHeader
                             class="flex flex-row items-center justify-between"
                         >
@@ -1019,30 +1017,42 @@ onMounted(() => {
                         <CardHeader>
                             <CardTitle>Amortization Schedule</CardTitle>
                         </CardHeader>
-                        <CardContent class="w-full overflow-hidden p-0">
-                            <AmortizationTable
-                                :breakdown="yearlyBreakdown"
-                                :format-currency="formatCurrency"
-                                :format-number="formatNumber"
-                                :ejerudgift="inputs.ejerudgift"
-                                :heating="inputs.heating"
-                                :water="inputs.water"
-                                :repairs="inputs.repairs"
-                                :rent-expenses="inputs.rentExpenses"
-                                :variable-effective-rate="variableEffectiveRate"
-                                :flexible-loan-type="inputs.flexibleLoanType"
-                                :has-variable-loan="
-                                    inputs.fixedMortgagePercentage < 100
-                                "
-                                :initial-fixed-balance="fixedLoanPlusBond"
-                                :initial-variable-balance="variableLoanAmount"
-                                :initial-bank-loan-balance="bankLoanAmount"
-                                :is-editable-year="isEditableYear"
-                                :set-variable-rate-for-year="
-                                    setVariableRateForYear
-                                "
-                                :variable-rate-overrides="variableRateOverrides"
-                            />
+                        <CardContent class="w-full p-0">
+                            <div
+                                class="max-w-[calc(100vw-2rem)] overflow-x-auto lg:max-w-[calc(100vw-300px-4rem)]"
+                            >
+                                <AmortizationTable
+                                    :breakdown="yearlyBreakdown"
+                                    :format-currency="formatCurrency"
+                                    :format-number="formatNumber"
+                                    :ejerudgift="inputs.ejerudgift"
+                                    :heating="inputs.heating"
+                                    :water="inputs.water"
+                                    :repairs="inputs.repairs"
+                                    :rent-expenses="inputs.rentExpenses"
+                                    :variable-effective-rate="
+                                        variableEffectiveRate
+                                    "
+                                    :flexible-loan-type="
+                                        inputs.flexibleLoanType
+                                    "
+                                    :has-variable-loan="
+                                        inputs.fixedMortgagePercentage < 100
+                                    "
+                                    :initial-fixed-balance="fixedLoanPlusBond"
+                                    :initial-variable-balance="
+                                        variableLoanAmount
+                                    "
+                                    :initial-bank-loan-balance="bankLoanAmount"
+                                    :is-editable-year="isEditableYear"
+                                    :set-variable-rate-for-year="
+                                        setVariableRateForYear
+                                    "
+                                    :variable-rate-overrides="
+                                        variableRateOverrides
+                                    "
+                                />
+                            </div>
                         </CardContent>
                     </Card>
 
