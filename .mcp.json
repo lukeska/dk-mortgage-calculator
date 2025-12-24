@@ -1,11 +1,16 @@
 {
     "mcpServers": {
         "laravel-boost": {
+            "command": "C:\\Users\\lucau\\.config\\herd\\bin\\php84\\php.exe",
+            "args": ["artisan", "boost:mcp"],
+            "cwd": "C:\\Users\\lucau\\Herd\\dk-mortgage-calculator"
+        },
+        "herd": {
             "command": "php",
-            "args": [
-                "artisan",
-                "boost:mcp"
-            ]
+            "args": ["C:/Users/lucau/.config/herd/bin/herd-mcp.phar"],
+            "env": {
+                "SITE_PATH": "C:\\Users\\lucau\\Herd\\dk-mortgage-calculator"
+            }
         }
     }
 }

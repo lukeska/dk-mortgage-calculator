@@ -4,15 +4,8 @@ use App\Http\Controllers\CalculatorController;
 use App\Http\Controllers\MortgageController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use Laravel\Fortify\Features;
 
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
-})->name('home');
-
-Route::get('/calculator', [CalculatorController::class, 'show'])->name('calculator');
+Route::get('/', [CalculatorController::class, 'show'])->name('home');
 
 Route::get('/mortgage-simulation/{mortgage}', [CalculatorController::class, 'showMortgage'])
     ->middleware(['auth'])

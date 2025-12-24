@@ -3,7 +3,7 @@ import { showMortgage } from '@/actions/App/Http/Controllers/CalculatorControlle
 import { destroy as deleteMortgage } from '@/actions/App/Http/Controllers/MortgageController';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { calculator, dashboard } from '@/routes';
+import { home, dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -197,7 +197,7 @@ async function performDelete() {
                 <CardHeader class="flex flex-row items-center justify-between">
                     <CardTitle>Saved Mortgage Calculations</CardTitle>
                     <Link
-                        :href="calculator().url"
+                        :href="home().url"
                         class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                     >
                         New Calculation
@@ -340,7 +340,7 @@ async function performDelete() {
                             You haven't saved any mortgage calculations yet.
                         </p>
                         <Link
-                            :href="calculator().url"
+                            :href="home().url"
                             class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                         >
                             Create Your First Calculation

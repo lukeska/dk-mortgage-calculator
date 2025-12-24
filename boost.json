@@ -5,5 +5,8 @@
     "editors": [
         "claude_code"
     ],
-    "guidelines": []
+    "guidelines": [
+        "laravel/fortify"
+    ],
+    "herd_mcp": true
 }

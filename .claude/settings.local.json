@@ -9,7 +9,10 @@
       "Bash(vendor/bin/pint:*)",
       "Bash(npm run build:*)",
       "Bash(npm install:*)",
-      "WebFetch(domain:dm4t2.github.io)"
+      "WebFetch(domain:dm4t2.github.io)",
+      "WebFetch(domain:www.exchangerate-api.com)",
+      "WebSearch",
+      "Bash(composer show:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

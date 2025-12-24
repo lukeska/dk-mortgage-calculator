@@ -4,6 +4,10 @@ import {
     update as updateMortgage,
 } from '@/actions/App/Http/Controllers/MortgageController';
 import AmortizationTable from '@/components/AmortizationTable.vue';
+import SensitivityTablePropertyValueDownpayment from '@/components/SensitivityTablePropertyValueDownpayment.vue';
+import SensitivityTablePropertyValueEjerudgift from '@/components/SensitivityTablePropertyValueEjerudgift.vue';
+import SensitivityTablePropertyValueFixedInterest from '@/components/SensitivityTablePropertyValueFixedInterest.vue';
+import SensitivityTablePropertyValueInterest from '@/components/SensitivityTablePropertyValueInterest.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CurrencyInput from '@/components/ui/input/CurrencyInput.vue';
 import Input from '@/components/ui/input/Input.vue';
@@ -11,7 +15,7 @@ import Label from '@/components/ui/label/Label.vue';
 import { useMortgageCalculator } from '@/composables/useMortgageCalculator';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
 
 interface MortgageData {
@@ -91,7 +95,16 @@ const isAuthenticated = computed(() => !!page.props.auth?.user);
 const currentMortgageId = ref<number | null>(null);
 const saveName = ref('');
 const showSaveModal = ref(false);
+const showLoginRequiredModal = ref(false);
 const isSaving = ref(false);
+
+function handleSaveClick() {
+    if (isAuthenticated.value) {
+        showSaveModal.value = true;
+    } else {
+        showLoginRequiredModal.value = true;
+    }
+}
 
 async function saveConfiguration() {
     if (!saveName.value.trim()) return;
@@ -172,7 +185,7 @@ onMounted(() => {
             <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
                 <div class="flex flex-col gap-6">
                     <!-- Save/Load Configuration -->
-                    <Card v-if="isAuthenticated">
+                    <Card>
                         <CardHeader>
                             <CardTitle>{{
                                 saveName || 'New Calculation'
@@ -182,7 +195,7 @@ onMounted(() => {
                             <div class="flex gap-2">
                                 <button
                                     class="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                                    @click="showSaveModal = true"
+                                    @click="handleSaveClick"
                                 >
                                     {{
                                         currentMortgageId
@@ -191,6 +204,7 @@ onMounted(() => {
                                     }}
                                 </button>
                                 <button
+                                    v-if="isAuthenticated"
                                     class="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
                                     @click="newConfiguration"
                                 >
@@ -238,6 +252,45 @@ onMounted(() => {
                                 >
                                     {{ isSaving ? 'Saving...' : 'Save' }}
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Login Required Modal -->
+                    <div
+                        v-if="showLoginRequiredModal"
+                        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                        @click.self="showLoginRequiredModal = false"
+                    >
+                        <div
+                            class="w-full max-w-md rounded-lg bg-background p-6 shadow-lg"
+                        >
+                            <h3 class="mb-4 text-lg font-semibold">
+                                Account Required
+                            </h3>
+                            <p class="mb-6 text-muted-foreground">
+                                To save your mortgage calculation, please log in
+                                or create an account.
+                            </p>
+                            <div class="flex justify-end gap-2">
+                                <button
+                                    class="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                                    @click="showLoginRequiredModal = false"
+                                >
+                                    Cancel
+                                </button>
+                                <Link
+                                    href="/register"
+                                    class="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                                >
+                                    Register
+                                </Link>
+                                <Link
+                                    href="/login"
+                                    class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                                >
+                                    Log in
+                                </Link>
                             </div>
                         </div>
                     </div>
@@ -1056,7 +1109,185 @@ onMounted(() => {
                         </CardContent>
                     </Card>
 
-                    <Card v-else>
+                    <Card v-if="yearlyBreakdown.length > 0">
+                        <CardHeader>
+                            <CardTitle
+                                >Property Value vs Downpayment / Total Cost
+                                (first year monthly)</CardTitle
+                            >
+                        </CardHeader>
+                        <CardContent class="w-full p-0">
+                            <div
+                                class="max-w-[calc(100vw-2rem)] overflow-x-auto p-4 lg:max-w-[calc(100vw-300px-4rem)]"
+                            >
+                                <SensitivityTablePropertyValueDownpayment
+                                    :property-value="inputs.propertyValue"
+                                    :downpayment="inputs.downpayment"
+                                    :ejerudgift="inputs.ejerudgift"
+                                    :heating="inputs.heating"
+                                    :water="inputs.water"
+                                    :repairs="inputs.repairs"
+                                    :fixed-mortgage-percentage="
+                                        inputs.fixedMortgagePercentage
+                                    "
+                                    :with-repayments="inputs.withRepayments"
+                                    :loan-period-fixed="inputs.loanPeriodFixed"
+                                    :loan-period-variable="
+                                        inputs.loanPeriodVariable
+                                    "
+                                    :bank-loan-period="inputs.bankLoanPeriod"
+                                    :bank-loan-interest="
+                                        inputs.bankLoanInterest
+                                    "
+                                    :fixed-effective-rate="fixedEffectiveRate"
+                                    :variable-effective-rate="
+                                        variableEffectiveRate
+                                    "
+                                    :f30-no-repay="inputs.f30NoRepay"
+                                    :f30-with-repay="inputs.f30WithRepay"
+                                    :format-currency="formatCurrency"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card v-if="yearlyBreakdown.length > 0">
+                        <CardHeader>
+                            <CardTitle
+                                >Property Value vs Ejerudgift / Total Cost
+                                (first year monthly)</CardTitle
+                            >
+                        </CardHeader>
+                        <CardContent class="w-full p-0">
+                            <div
+                                class="max-w-[calc(100vw-2rem)] overflow-x-auto p-4 lg:max-w-[calc(100vw-300px-4rem)]"
+                            >
+                                <SensitivityTablePropertyValueEjerudgift
+                                    :property-value="inputs.propertyValue"
+                                    :downpayment="inputs.downpayment"
+                                    :ejerudgift="inputs.ejerudgift"
+                                    :heating="inputs.heating"
+                                    :water="inputs.water"
+                                    :repairs="inputs.repairs"
+                                    :fixed-mortgage-percentage="
+                                        inputs.fixedMortgagePercentage
+                                    "
+                                    :with-repayments="inputs.withRepayments"
+                                    :loan-period-fixed="inputs.loanPeriodFixed"
+                                    :loan-period-variable="
+                                        inputs.loanPeriodVariable
+                                    "
+                                    :bank-loan-period="inputs.bankLoanPeriod"
+                                    :bank-loan-interest="
+                                        inputs.bankLoanInterest
+                                    "
+                                    :fixed-effective-rate="fixedEffectiveRate"
+                                    :variable-effective-rate="
+                                        variableEffectiveRate
+                                    "
+                                    :f30-no-repay="inputs.f30NoRepay"
+                                    :f30-with-repay="inputs.f30WithRepay"
+                                    :format-currency="formatCurrency"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card
+                        v-if="
+                            yearlyBreakdown.length > 0 &&
+                            inputs.fixedMortgagePercentage > 0
+                        "
+                    >
+                        <CardHeader>
+                            <CardTitle
+                                >Property Value vs Fixed Interest / Total Cost
+                                (first year monthly)</CardTitle
+                            >
+                        </CardHeader>
+                        <CardContent class="w-full p-0">
+                            <div
+                                class="max-w-[calc(100vw-2rem)] overflow-x-auto p-4 lg:max-w-[calc(100vw-300px-4rem)]"
+                            >
+                                <SensitivityTablePropertyValueFixedInterest
+                                    :property-value="inputs.propertyValue"
+                                    :downpayment="inputs.downpayment"
+                                    :ejerudgift="inputs.ejerudgift"
+                                    :heating="inputs.heating"
+                                    :water="inputs.water"
+                                    :repairs="inputs.repairs"
+                                    :fixed-mortgage-percentage="
+                                        inputs.fixedMortgagePercentage
+                                    "
+                                    :with-repayments="inputs.withRepayments"
+                                    :loan-period-fixed="inputs.loanPeriodFixed"
+                                    :loan-period-variable="
+                                        inputs.loanPeriodVariable
+                                    "
+                                    :bank-loan-period="inputs.bankLoanPeriod"
+                                    :bank-loan-interest="
+                                        inputs.bankLoanInterest
+                                    "
+                                    :fixed-effective-rate="fixedEffectiveRate"
+                                    :variable-effective-rate="
+                                        variableEffectiveRate
+                                    "
+                                    :f30-no-repay="inputs.f30NoRepay"
+                                    :f30-with-repay="inputs.f30WithRepay"
+                                    :format-currency="formatCurrency"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card
+                        v-if="
+                            yearlyBreakdown.length > 0 &&
+                            inputs.fixedMortgagePercentage < 100
+                        "
+                    >
+                        <CardHeader>
+                            <CardTitle
+                                >Property Value vs Variable Interest / Total
+                                Cost (first year monthly)</CardTitle
+                            >
+                        </CardHeader>
+                        <CardContent class="w-full p-0">
+                            <div
+                                class="max-w-[calc(100vw-2rem)] overflow-x-auto p-4 lg:max-w-[calc(100vw-300px-4rem)]"
+                            >
+                                <SensitivityTablePropertyValueInterest
+                                    :property-value="inputs.propertyValue"
+                                    :downpayment="inputs.downpayment"
+                                    :ejerudgift="inputs.ejerudgift"
+                                    :heating="inputs.heating"
+                                    :water="inputs.water"
+                                    :repairs="inputs.repairs"
+                                    :fixed-mortgage-percentage="
+                                        inputs.fixedMortgagePercentage
+                                    "
+                                    :with-repayments="inputs.withRepayments"
+                                    :loan-period-fixed="inputs.loanPeriodFixed"
+                                    :loan-period-variable="
+                                        inputs.loanPeriodVariable
+                                    "
+                                    :bank-loan-period="inputs.bankLoanPeriod"
+                                    :bank-loan-interest="
+                                        inputs.bankLoanInterest
+                                    "
+                                    :fixed-effective-rate="fixedEffectiveRate"
+                                    :variable-effective-rate="
+                                        variableEffectiveRate
+                                    "
+                                    :f30-no-repay="inputs.f30NoRepay"
+                                    :f30-with-repay="inputs.f30WithRepay"
+                                    :format-currency="formatCurrency"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card v-if="yearlyBreakdown.length === 0">
                         <CardContent class="py-12">
                             <p
                                 class="text-center text-sm text-muted-foreground"
