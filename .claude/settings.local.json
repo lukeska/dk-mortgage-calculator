@@ -12,7 +12,10 @@
       "WebFetch(domain:dm4t2.github.io)",
       "WebFetch(domain:www.exchangerate-api.com)",
       "WebSearch",
-      "Bash(composer show:*)"
+      "Bash(composer show:*)",
+      "mcp__herd__get_site_information",
+      "mcp__herd__start_debug_session",
+      "mcp__herd__stop_debug_session"
     ]
   },
   "enableAllProjectMcpServers": true,

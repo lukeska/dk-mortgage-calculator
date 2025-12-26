@@ -46,12 +46,26 @@ const bidragssats = {
 };
 
 function calculateMortgageSummary(mortgage: Mortgage) {
-    const downpaymentPercentage =
-        mortgage.downpayment / mortgage.property_value;
+    const propertyValue = mortgage.property_value || 0;
+    const downpayment = mortgage.downpayment || 0;
+
+    const fixedPct = mortgage.fixed_mortgage_percentage ?? 100;
+    const loanType = mortgage.flexible_loan_type || 'F5';
+
+    if (propertyValue <= 0) {
+        return {
+            totalLoanAmount: 0,
+            totalInterestPaid: 0,
+            totalAmountPaid: 0,
+            loanConfig: `${fixedPct}% Fixed / ${100 - fixedPct}% ${loanType}`,
+        };
+    }
+
+    const downpaymentPercentage = downpayment / propertyValue;
     const totalLoanAmount =
         downpaymentPercentage >= 0.2
-            ? mortgage.property_value - mortgage.downpayment
-            : mortgage.property_value * 0.8;
+            ? propertyValue - downpayment
+            : propertyValue * 0.8;
 
     const fixedLoanAmount =
         totalLoanAmount * (mortgage.fixed_mortgage_percentage / 100);
@@ -59,58 +73,57 @@ function calculateMortgageSummary(mortgage: Mortgage) {
 
     // Calculate bond adjustment for fixed loan
     const bondPercentage = mortgage.with_repayments
-        ? mortgage.f30_with_repay
-        : mortgage.f30_no_repay;
-    const fixedLoanPlusBond = Math.round(
-        fixedLoanAmount / (bondPercentage / 100),
-    );
+        ? mortgage.f30_with_repay || 96
+        : mortgage.f30_no_repay || 91;
+    const fixedLoanPlusBond =
+        bondPercentage > 0
+            ? Math.round(fixedLoanAmount / (bondPercentage / 100))
+            : fixedLoanAmount;
 
     // Calculate effective rates
+    const bidragssatsAdjustment = mortgage.bidragssats_adjustment || 0;
+    const interestRateF30 = mortgage.interest_rate_f30 || 5;
+    const interestRateF3 = mortgage.interest_rate_f3 || 3.59;
+    const interestRateF5 = mortgage.interest_rate_f5 || 3.49;
+
     const fixedBaseBidragssats = mortgage.with_repayments
         ? bidragssats.F30.withRepayments
         : bidragssats.F30.noRepayments;
     const fixedBidragssats =
-        fixedBaseBidragssats * (1 - mortgage.bidragssats_adjustment / 100);
-    const fixedEffectiveRate = mortgage.interest_rate_f30 + fixedBidragssats;
+        fixedBaseBidragssats * (1 - bidragssatsAdjustment / 100);
+    const fixedEffectiveRate = interestRateF30 + fixedBidragssats;
 
     const variableBaseBidragssats = mortgage.with_repayments
-        ? bidragssats[mortgage.flexible_loan_type].withRepayments
-        : bidragssats[mortgage.flexible_loan_type].noRepayments;
+        ? bidragssats[loanType].withRepayments
+        : bidragssats[loanType].noRepayments;
     const variableBidragssats =
-        variableBaseBidragssats * (1 - mortgage.bidragssats_adjustment / 100);
+        variableBaseBidragssats * (1 - bidragssatsAdjustment / 100);
     const variableBaseRate =
-        mortgage.flexible_loan_type === 'F3'
-            ? mortgage.interest_rate_f3
-            : mortgage.interest_rate_f5;
+        loanType === 'F3' ? interestRateF3 : interestRateF5;
     const variableEffectiveRate = variableBaseRate + variableBidragssats;
 
     // Calculate totals (simplified - assumes linear repayment)
-    const maxPeriod = Math.max(
-        mortgage.loan_period_fixed,
-        mortgage.loan_period_variable,
-    );
+    const loanPeriodFixed = mortgage.loan_period_fixed || 30;
+    const loanPeriodVariable = mortgage.loan_period_variable || 30;
+    const maxPeriod = Math.max(loanPeriodFixed, loanPeriodVariable);
     let totalInterestPaid = 0;
     let fixedBalance = fixedLoanPlusBond;
     let variableBalance = variableLoanAmount;
 
     const fixedYearlyPrincipal =
-        mortgage.loan_period_fixed > 0
-            ? fixedLoanPlusBond / mortgage.loan_period_fixed
-            : 0;
+        loanPeriodFixed > 0 ? fixedLoanPlusBond / loanPeriodFixed : 0;
     const variableYearlyPrincipal =
-        mortgage.loan_period_variable > 0
-            ? variableLoanAmount / mortgage.loan_period_variable
-            : 0;
+        loanPeriodVariable > 0 ? variableLoanAmount / loanPeriodVariable : 0;
 
     for (let year = 1; year <= maxPeriod; year++) {
         // Fixed loan interest
-        if (fixedBalance > 0 && year <= mortgage.loan_period_fixed) {
+        if (fixedBalance > 0 && year <= loanPeriodFixed) {
             totalInterestPaid += fixedBalance * (fixedEffectiveRate / 100);
             fixedBalance -= fixedYearlyPrincipal;
         }
 
         // Variable loan interest
-        if (variableBalance > 0 && year <= mortgage.loan_period_variable) {
+        if (variableBalance > 0 && year <= loanPeriodVariable) {
             totalInterestPaid +=
                 variableBalance * (variableEffectiveRate / 100);
             variableBalance -= variableYearlyPrincipal;
@@ -124,7 +137,7 @@ function calculateMortgageSummary(mortgage: Mortgage) {
         totalLoanAmount: fixedLoanPlusBond + variableLoanAmount,
         totalInterestPaid,
         totalAmountPaid,
-        loanConfig: `${mortgage.fixed_mortgage_percentage}% Fixed / ${100 - mortgage.fixed_mortgage_percentage}% ${mortgage.flexible_loan_type}`,
+        loanConfig: `${fixedPct}% Fixed / ${100 - fixedPct}% ${loanType}`,
     };
 }
 
