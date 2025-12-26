@@ -76,6 +76,13 @@ const currentExchangeRate = computed(() => {
     return rate ? parseFloat(rate.rate) : 1;
 });
 
+const totalBankLoanInterest = computed(() => {
+    return yearlyBreakdown.value.reduce(
+        (sum, year) => sum + year.bankLoanInterest,
+        0,
+    );
+});
+
 function formatCurrency(value: number): string {
     const convertedValue = value * currentExchangeRate.value;
     return new Intl.NumberFormat('da-DK', {
@@ -1013,6 +1020,23 @@ onMounted(() => {
                                                 summary.totalInterestPaid,
                                             )
                                         }}
+                                    </span>
+                                </div>
+                                <div
+                                    v-if="bankLoanAmount > 0"
+                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
+                                >
+                                    <span class="text-sm text-muted-foreground">
+                                        Bank Loan Interest
+                                    </span>
+                                    <span class="text-xl font-semibold">
+                                        {{
+                                            formatCurrency(totalBankLoanInterest)
+                                        }}
+                                    </span>
+                                    <span class="text-xs text-muted-foreground">
+                                        {{ inputs.bankLoanInterest }}% over
+                                        {{ inputs.bankLoanPeriod }} years
                                     </span>
                                 </div>
                                 <div

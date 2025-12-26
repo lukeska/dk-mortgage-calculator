@@ -13,11 +13,17 @@ interface Mortgage {
     name: string;
     property_value: number;
     downpayment: number;
+    ejerudgift: number;
+    heating: number;
+    water: number;
+    repairs: number;
     loan_period_fixed: number;
     loan_period_variable: number;
     fixed_mortgage_percentage: number;
     flexible_loan_type: 'F3' | 'F5';
     with_repayments: boolean;
+    bank_loan_interest: number;
+    bank_loan_period: number;
     interest_rate_f3: number;
     interest_rate_f5: number;
     interest_rate_f30: number;
@@ -57,6 +63,7 @@ function calculateMortgageSummary(mortgage: Mortgage) {
             totalLoanAmount: 0,
             totalInterestPaid: 0,
             totalAmountPaid: 0,
+            firstYearMonthlyCost: 0,
             loanConfig: `${fixedPct}% Fixed / ${100 - fixedPct}% ${loanType}`,
         };
     }
@@ -133,10 +140,67 @@ function calculateMortgageSummary(mortgage: Mortgage) {
     const totalAmountPaid =
         fixedLoanPlusBond + variableLoanAmount + totalInterestPaid;
 
+    // Calculate first year monthly cost
+    const ejerudgift = mortgage.ejerudgift || 0;
+    const heating = mortgage.heating || 0;
+    const water = mortgage.water || 0;
+    const repairs = mortgage.repairs || 0;
+    const monthlyUtilities = ejerudgift + heating + water + repairs;
+
+    // First year mortgage payment
+    const firstYearFixedInterest =
+        fixedLoanPlusBond * (fixedEffectiveRate / 100);
+    const firstYearVariableInterest =
+        variableLoanAmount * (variableEffectiveRate / 100);
+    const firstYearFixedPrincipal = mortgage.with_repayments
+        ? fixedYearlyPrincipal
+        : 0;
+    const firstYearVariablePrincipal = mortgage.with_repayments
+        ? variableYearlyPrincipal
+        : 0;
+
+    // Bank loan calculation
+    const capitalNeeded = propertyValue * 0.2;
+    const bankLoanAmount = Math.max(0, capitalNeeded - downpayment);
+    const bankLoanInterest = mortgage.bank_loan_interest || 6;
+    const bankLoanPeriod = mortgage.bank_loan_period || 10;
+    const firstYearBankLoanInterest =
+        bankLoanAmount * (bankLoanInterest / 100);
+    const firstYearBankLoanPrincipal =
+        bankLoanPeriod > 0 ? bankLoanAmount / bankLoanPeriod : 0;
+
+    const firstYearTotalPayment =
+        firstYearFixedInterest +
+        firstYearFixedPrincipal +
+        firstYearVariableInterest +
+        firstYearVariablePrincipal +
+        firstYearBankLoanInterest +
+        firstYearBankLoanPrincipal;
+
+    // Calculate tax deduction on interest
+    const totalFirstYearInterest =
+        firstYearFixedInterest +
+        firstYearVariableInterest +
+        firstYearBankLoanInterest;
+    const interestDeductionThreshold = 100000;
+    const tier1DeductionRate = 0.336;
+    const tier2DeductionRate = 0.206;
+    const tier1Deduction =
+        Math.min(totalFirstYearInterest, interestDeductionThreshold) *
+        tier1DeductionRate;
+    const tier2Deduction =
+        Math.max(0, totalFirstYearInterest - interestDeductionThreshold) *
+        tier2DeductionRate;
+    const taxDeduction = tier1Deduction + tier2Deduction;
+
+    const firstYearMonthlyCost =
+        (firstYearTotalPayment - taxDeduction) / 12 + monthlyUtilities;
+
     return {
         totalLoanAmount: fixedLoanPlusBond + variableLoanAmount,
         totalInterestPaid,
         totalAmountPaid,
+        firstYearMonthlyCost,
         loanConfig: `${fixedPct}% Fixed / ${100 - fixedPct}% ${loanType}`,
     };
 }
@@ -258,6 +322,11 @@ async function performDelete() {
                                     <th
                                         class="px-4 py-3 text-right font-medium"
                                     >
+                                        1st Year Monthly
+                                    </th>
+                                    <th
+                                        class="px-4 py-3 text-right font-medium"
+                                    >
                                         Actions
                                     </th>
                                 </tr>
@@ -323,6 +392,16 @@ async function performDelete() {
                                             formatCurrency(
                                                 mortgage.summary
                                                     .totalAmountPaid,
+                                            )
+                                        }}
+                                    </td>
+                                    <td
+                                        class="px-4 py-3 text-right font-medium text-primary"
+                                    >
+                                        {{
+                                            formatCurrency(
+                                                mortgage.summary
+                                                    .firstYearMonthlyCost,
                                             )
                                         }}
                                     </td>
