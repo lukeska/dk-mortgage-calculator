@@ -45,6 +45,16 @@ class UpdateMortgageRequest extends FormRequest
             'inflation_rent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'variable_rate_overrides' => ['nullable', 'array'],
             'variable_rate_overrides.*' => ['numeric', 'min:0', 'max:100'],
+            'loan_total_amount' => ['sometimes', 'integer', 'min:0'],
+            'fixed_loan_total_amount' => ['sometimes', 'integer', 'min:0'],
+            'variable_loan_total_amount' => ['sometimes', 'integer', 'min:0'],
+            'bank_loan_total_amount' => ['sometimes', 'integer', 'min:0'],
+            'fixed_interest_total_amount' => ['sometimes', 'integer', 'min:0'],
+            'variable_interest_total_amount' => ['sometimes', 'integer', 'min:0'],
+            'bank_interest_total_amount' => ['sometimes', 'integer', 'min:0'],
+            'total_tax_deductions' => ['sometimes', 'integer', 'min:0'],
+            'first_year_tax_deduction' => ['sometimes', 'integer', 'min:0'],
+            'first_year_monthly_cost' => ['sometimes', 'integer', 'min:0'],
         ];
     }
 }

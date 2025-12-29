@@ -3,33 +3,28 @@ import { showMortgage } from '@/actions/App/Http/Controllers/CalculatorControlle
 import { destroy as deleteMortgage } from '@/actions/App/Http/Controllers/MortgageController';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { home, dashboard } from '@/routes';
+import { dashboard, home } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 
 interface Mortgage {
     id: number;
     name: string;
     property_value: number;
     downpayment: number;
-    ejerudgift: number;
-    heating: number;
-    water: number;
-    repairs: number;
-    loan_period_fixed: number;
-    loan_period_variable: number;
     fixed_mortgage_percentage: number;
     flexible_loan_type: 'F3' | 'F5';
     with_repayments: boolean;
-    bank_loan_interest: number;
-    bank_loan_period: number;
-    interest_rate_f3: number;
-    interest_rate_f5: number;
-    interest_rate_f30: number;
-    bidragssats_adjustment: number;
-    f30_no_repay: number;
-    f30_with_repay: number;
+    loan_total_amount: number;
+    fixed_loan_total_amount: number;
+    variable_loan_total_amount: number;
+    bank_loan_total_amount: number;
+    fixed_interest_total_amount: number;
+    variable_interest_total_amount: number;
+    bank_interest_total_amount: number;
+    first_year_tax_deduction: number;
+    first_year_monthly_cost: number;
     created_at: string;
     updated_at: string;
 }
@@ -45,172 +40,30 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const bidragssats = {
-    F3: { withRepayments: 1.05, noRepayments: 1.38 },
-    F5: { withRepayments: 0.85, noRepayments: 0.77 },
-    F30: { withRepayments: 0.68, noRepayments: 1.57 },
-};
-
-function calculateMortgageSummary(mortgage: Mortgage) {
-    const propertyValue = mortgage.property_value || 0;
-    const downpayment = mortgage.downpayment || 0;
-
+function getLoanConfig(mortgage: Mortgage): string {
     const fixedPct = mortgage.fixed_mortgage_percentage ?? 100;
     const loanType = mortgage.flexible_loan_type || 'F5';
-
-    if (propertyValue <= 0) {
-        return {
-            totalLoanAmount: 0,
-            totalInterestPaid: 0,
-            totalAmountPaid: 0,
-            firstYearMonthlyCost: 0,
-            loanConfig: `${fixedPct}% Fixed / ${100 - fixedPct}% ${loanType}`,
-        };
-    }
-
-    const downpaymentPercentage = downpayment / propertyValue;
-    const totalLoanAmount =
-        downpaymentPercentage >= 0.2
-            ? propertyValue - downpayment
-            : propertyValue * 0.8;
-
-    const fixedLoanAmount =
-        totalLoanAmount * (mortgage.fixed_mortgage_percentage / 100);
-    const variableLoanAmount = totalLoanAmount - fixedLoanAmount;
-
-    // Calculate bond adjustment for fixed loan
-    const bondPercentage = mortgage.with_repayments
-        ? mortgage.f30_with_repay || 96
-        : mortgage.f30_no_repay || 91;
-    const fixedLoanPlusBond =
-        bondPercentage > 0
-            ? Math.round(fixedLoanAmount / (bondPercentage / 100))
-            : fixedLoanAmount;
-
-    // Calculate effective rates
-    const bidragssatsAdjustment = mortgage.bidragssats_adjustment || 0;
-    const interestRateF30 = mortgage.interest_rate_f30 || 5;
-    const interestRateF3 = mortgage.interest_rate_f3 || 3.59;
-    const interestRateF5 = mortgage.interest_rate_f5 || 3.49;
-
-    const fixedBaseBidragssats = mortgage.with_repayments
-        ? bidragssats.F30.withRepayments
-        : bidragssats.F30.noRepayments;
-    const fixedBidragssats =
-        fixedBaseBidragssats * (1 - bidragssatsAdjustment / 100);
-    const fixedEffectiveRate = interestRateF30 + fixedBidragssats;
-
-    const variableBaseBidragssats = mortgage.with_repayments
-        ? bidragssats[loanType].withRepayments
-        : bidragssats[loanType].noRepayments;
-    const variableBidragssats =
-        variableBaseBidragssats * (1 - bidragssatsAdjustment / 100);
-    const variableBaseRate =
-        loanType === 'F3' ? interestRateF3 : interestRateF5;
-    const variableEffectiveRate = variableBaseRate + variableBidragssats;
-
-    // Calculate totals (simplified - assumes linear repayment)
-    const loanPeriodFixed = mortgage.loan_period_fixed || 30;
-    const loanPeriodVariable = mortgage.loan_period_variable || 30;
-    const maxPeriod = Math.max(loanPeriodFixed, loanPeriodVariable);
-    let totalInterestPaid = 0;
-    let fixedBalance = fixedLoanPlusBond;
-    let variableBalance = variableLoanAmount;
-
-    const fixedYearlyPrincipal =
-        loanPeriodFixed > 0 ? fixedLoanPlusBond / loanPeriodFixed : 0;
-    const variableYearlyPrincipal =
-        loanPeriodVariable > 0 ? variableLoanAmount / loanPeriodVariable : 0;
-
-    for (let year = 1; year <= maxPeriod; year++) {
-        // Fixed loan interest
-        if (fixedBalance > 0 && year <= loanPeriodFixed) {
-            totalInterestPaid += fixedBalance * (fixedEffectiveRate / 100);
-            fixedBalance -= fixedYearlyPrincipal;
-        }
-
-        // Variable loan interest
-        if (variableBalance > 0 && year <= loanPeriodVariable) {
-            totalInterestPaid +=
-                variableBalance * (variableEffectiveRate / 100);
-            variableBalance -= variableYearlyPrincipal;
-        }
-    }
-
-    const totalAmountPaid =
-        fixedLoanPlusBond + variableLoanAmount + totalInterestPaid;
-
-    // Calculate first year monthly cost
-    const ejerudgift = mortgage.ejerudgift || 0;
-    const heating = mortgage.heating || 0;
-    const water = mortgage.water || 0;
-    const repairs = mortgage.repairs || 0;
-    const monthlyUtilities = ejerudgift + heating + water + repairs;
-
-    // First year mortgage payment
-    const firstYearFixedInterest =
-        fixedLoanPlusBond * (fixedEffectiveRate / 100);
-    const firstYearVariableInterest =
-        variableLoanAmount * (variableEffectiveRate / 100);
-    const firstYearFixedPrincipal = mortgage.with_repayments
-        ? fixedYearlyPrincipal
-        : 0;
-    const firstYearVariablePrincipal = mortgage.with_repayments
-        ? variableYearlyPrincipal
-        : 0;
-
-    // Bank loan calculation
-    const capitalNeeded = propertyValue * 0.2;
-    const bankLoanAmount = Math.max(0, capitalNeeded - downpayment);
-    const bankLoanInterest = mortgage.bank_loan_interest || 6;
-    const bankLoanPeriod = mortgage.bank_loan_period || 10;
-    const firstYearBankLoanInterest =
-        bankLoanAmount * (bankLoanInterest / 100);
-    const firstYearBankLoanPrincipal =
-        bankLoanPeriod > 0 ? bankLoanAmount / bankLoanPeriod : 0;
-
-    const firstYearTotalPayment =
-        firstYearFixedInterest +
-        firstYearFixedPrincipal +
-        firstYearVariableInterest +
-        firstYearVariablePrincipal +
-        firstYearBankLoanInterest +
-        firstYearBankLoanPrincipal;
-
-    // Calculate tax deduction on interest
-    const totalFirstYearInterest =
-        firstYearFixedInterest +
-        firstYearVariableInterest +
-        firstYearBankLoanInterest;
-    const interestDeductionThreshold = 100000;
-    const tier1DeductionRate = 0.336;
-    const tier2DeductionRate = 0.206;
-    const tier1Deduction =
-        Math.min(totalFirstYearInterest, interestDeductionThreshold) *
-        tier1DeductionRate;
-    const tier2Deduction =
-        Math.max(0, totalFirstYearInterest - interestDeductionThreshold) *
-        tier2DeductionRate;
-    const taxDeduction = tier1Deduction + tier2Deduction;
-
-    const firstYearMonthlyCost =
-        (firstYearTotalPayment - taxDeduction) / 12 + monthlyUtilities;
-
-    return {
-        totalLoanAmount: fixedLoanPlusBond + variableLoanAmount,
-        totalInterestPaid,
-        totalAmountPaid,
-        firstYearMonthlyCost,
-        loanConfig: `${fixedPct}% Fixed / ${100 - fixedPct}% ${loanType}`,
-    };
+    return `${fixedPct}% Fixed / ${100 - fixedPct}% ${loanType}`;
 }
 
-const mortgagesWithSummary = computed(() =>
-    props.mortgages.map((mortgage) => ({
-        ...mortgage,
-        summary: calculateMortgageSummary(mortgage),
-    })),
-);
+function getTotalInterest(mortgage: Mortgage): number {
+    return (
+        mortgage.fixed_interest_total_amount +
+        mortgage.variable_interest_total_amount +
+        mortgage.bank_interest_total_amount
+    );
+}
+
+function getTotalAmountPaid(mortgage: Mortgage): number {
+    return mortgage.loan_total_amount + getTotalInterest(mortgage);
+}
+
+function getFirstYearMonthlyCostNet(mortgage: Mortgage): number {
+    return (
+        mortgage.first_year_monthly_cost -
+        mortgage.first_year_tax_deduction / 12
+    );
+}
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('da-DK', {
@@ -245,12 +98,15 @@ async function performDelete() {
 
     isDeleting.value = true;
     try {
-        const response = await fetch(deleteMortgage.url(mortgageToDelete.value.id), {
-            method: 'DELETE',
-            headers: {
-                'X-XSRF-TOKEN': getCsrfToken(),
+        const response = await fetch(
+            deleteMortgage.url(mortgageToDelete.value.id),
+            {
+                method: 'DELETE',
+                headers: {
+                    'X-XSRF-TOKEN': getCsrfToken(),
+                },
             },
-        });
+        );
 
         if (response.ok) {
             showDeleteModal.value = false;
@@ -281,10 +137,7 @@ async function performDelete() {
                     </Link>
                 </CardHeader>
                 <CardContent>
-                    <div
-                        v-if="mortgagesWithSummary.length > 0"
-                        class="overflow-x-auto"
-                    >
+                    <div v-if="mortgages.length > 0" class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
                                 <tr
@@ -333,7 +186,7 @@ async function performDelete() {
                             </thead>
                             <tbody class="divide-y divide-border">
                                 <tr
-                                    v-for="mortgage in mortgagesWithSummary"
+                                    v-for="mortgage in mortgages"
                                     :key="mortgage.id"
                                     class="hover:bg-muted/50"
                                 >
@@ -357,7 +210,7 @@ async function performDelete() {
                                         }}
                                     </td>
                                     <td class="px-4 py-3 text-muted-foreground">
-                                        {{ mortgage.summary.loanConfig }}
+                                        {{ getLoanConfig(mortgage) }}
                                         <span class="text-xs">
                                             ({{
                                                 mortgage.with_repayments
@@ -371,7 +224,7 @@ async function performDelete() {
                                     >
                                         {{
                                             formatCurrency(
-                                                mortgage.summary.totalLoanAmount,
+                                                mortgage.loan_total_amount,
                                             )
                                         }}
                                     </td>
@@ -380,8 +233,7 @@ async function performDelete() {
                                     >
                                         {{
                                             formatCurrency(
-                                                mortgage.summary
-                                                    .totalInterestPaid,
+                                                getTotalInterest(mortgage),
                                             )
                                         }}
                                     </td>
@@ -390,8 +242,7 @@ async function performDelete() {
                                     >
                                         {{
                                             formatCurrency(
-                                                mortgage.summary
-                                                    .totalAmountPaid,
+                                                getTotalAmountPaid(mortgage),
                                             )
                                         }}
                                     </td>
@@ -400,16 +251,20 @@ async function performDelete() {
                                     >
                                         {{
                                             formatCurrency(
-                                                mortgage.summary
-                                                    .firstYearMonthlyCost,
+                                                getFirstYearMonthlyCostNet(
+                                                    mortgage,
+                                                ),
                                             )
                                         }}
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <div class="flex items-center justify-end gap-3">
+                                        <div
+                                            class="flex items-center justify-end gap-3"
+                                        >
                                             <Link
                                                 :href="
-                                                    showMortgage(mortgage.id).url
+                                                    showMortgage(mortgage.id)
+                                                        .url
                                                 "
                                                 class="text-primary hover:underline"
                                             >

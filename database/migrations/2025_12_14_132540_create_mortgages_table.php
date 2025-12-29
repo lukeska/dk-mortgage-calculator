@@ -56,6 +56,18 @@ return new class extends Migration
             // Year-specific overrides
             $table->json('variable_rate_overrides')->nullable();
 
+            // Computed totals (stored for dashboard/reporting)
+            $table->unsignedBigInteger('loan_total_amount')->default(0);
+            $table->unsignedBigInteger('fixed_loan_total_amount')->default(0);
+            $table->unsignedBigInteger('variable_loan_total_amount')->default(0);
+            $table->unsignedBigInteger('bank_loan_total_amount')->default(0);
+            $table->unsignedBigInteger('fixed_interest_total_amount')->default(0);
+            $table->unsignedBigInteger('variable_interest_total_amount')->default(0);
+            $table->unsignedBigInteger('bank_interest_total_amount')->default(0);
+            $table->unsignedBigInteger('total_tax_deductions')->default(0);
+            $table->unsignedInteger('first_year_tax_deduction')->default(0);
+            $table->unsignedInteger('first_year_monthly_cost')->default(0);
+
             $table->timestamps();
         });
     }

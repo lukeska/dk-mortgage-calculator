@@ -39,6 +39,16 @@ class Mortgage extends Model
         'inflation_repairs',
         'inflation_rent',
         'variable_rate_overrides',
+        'loan_total_amount',
+        'fixed_loan_total_amount',
+        'variable_loan_total_amount',
+        'bank_loan_total_amount',
+        'fixed_interest_total_amount',
+        'variable_interest_total_amount',
+        'bank_interest_total_amount',
+        'total_tax_deductions',
+        'first_year_tax_deduction',
+        'first_year_monthly_cost',
     ];
 
     /**

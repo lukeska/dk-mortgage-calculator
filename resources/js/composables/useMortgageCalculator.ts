@@ -421,7 +421,33 @@ export function useMortgageCalculator() {
         );
     }
 
+    function calculateTaxDeduction(yearlyInterest: number): number {
+        const interestDeductionThreshold = 100000;
+        const tier1DeductionRate = 0.336;
+        const tier2DeductionRate = 0.206;
+        const tier1Deduction = Math.min(yearlyInterest, interestDeductionThreshold) * tier1DeductionRate;
+        const tier2Deduction = Math.max(0, yearlyInterest - interestDeductionThreshold) * tier2DeductionRate;
+        return tier1Deduction + tier2Deduction;
+    }
+
     function exportData() {
+        const breakdown = yearlyBreakdown.value;
+        const fixedInterestTotal = breakdown.reduce((sum, year) => sum + year.fixedInterest, 0);
+        const variableInterestTotal = breakdown.reduce((sum, year) => sum + year.variableInterest, 0);
+        const bankInterestTotal = breakdown.reduce((sum, year) => sum + year.bankLoanInterest, 0);
+
+        // Calculate tax deductions
+        const totalTaxDeductions = breakdown.reduce((sum, year) => {
+            const yearlyInterest = year.fixedInterest + year.variableInterest + year.bankLoanInterest;
+            return sum + calculateTaxDeduction(yearlyInterest);
+        }, 0);
+
+        const firstYearInterest = breakdown.length > 0
+            ? breakdown[0].fixedInterest + breakdown[0].variableInterest + breakdown[0].bankLoanInterest
+            : 0;
+        const firstYearTaxDeduction = calculateTaxDeduction(firstYearInterest);
+        const firstYearMonthlyCost = breakdown.length > 0 ? breakdown[0].monthlyHousingCost : 0;
+
         return {
             property_value: inputs.propertyValue,
             downpayment: inputs.downpayment,
@@ -452,6 +478,16 @@ export function useMortgageCalculator() {
                 Object.keys(variableRateOverrides).length > 0
                     ? variableRateOverrides
                     : null,
+            loan_total_amount: Math.round(fixedLoanPlusBond.value + variableLoanAmount.value),
+            fixed_loan_total_amount: Math.round(fixedLoanPlusBond.value),
+            variable_loan_total_amount: Math.round(variableLoanAmount.value),
+            bank_loan_total_amount: Math.round(bankLoanAmount.value),
+            fixed_interest_total_amount: Math.round(fixedInterestTotal),
+            variable_interest_total_amount: Math.round(variableInterestTotal),
+            bank_interest_total_amount: Math.round(bankInterestTotal),
+            total_tax_deductions: Math.round(totalTaxDeductions),
+            first_year_tax_deduction: Math.round(firstYearTaxDeduction),
+            first_year_monthly_cost: Math.round(firstYearMonthlyCost),
         };
     }
 

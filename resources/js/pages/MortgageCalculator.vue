@@ -57,7 +57,6 @@ const {
     variableBidragssats,
     fixedEffectiveRate,
     variableEffectiveRate,
-    formatCurrency: formatCurrencyDKK,
     formatNumber,
     isEditableYear,
     setVariableRateForYear,
@@ -76,11 +75,61 @@ const currentExchangeRate = computed(() => {
     return rate ? parseFloat(rate.rate) : 1;
 });
 
+const totalFixedInterest = computed(() => {
+    return yearlyBreakdown.value.reduce((sum, year) => sum + year.fixedInterest, 0);
+});
+
+const totalVariableInterest = computed(() => {
+    return yearlyBreakdown.value.reduce((sum, year) => sum + year.variableInterest, 0);
+});
+
 const totalBankLoanInterest = computed(() => {
-    return yearlyBreakdown.value.reduce(
-        (sum, year) => sum + year.bankLoanInterest,
-        0,
-    );
+    return yearlyBreakdown.value.reduce((sum, year) => sum + year.bankLoanInterest, 0);
+});
+
+const totalLoanAll = computed(() => {
+    return fixedLoanPlusBond.value + variableLoanAmount.value + bankLoanAmount.value;
+});
+
+const totalInterestAll = computed(() => {
+    return totalFixedInterest.value + totalVariableInterest.value + totalBankLoanInterest.value;
+});
+
+function calculateTaxDeduction(yearlyInterest: number): number {
+    const interestDeductionThreshold = 100000;
+    const tier1DeductionRate = 0.336;
+    const tier2DeductionRate = 0.206;
+    const tier1Deduction = Math.min(yearlyInterest, interestDeductionThreshold) * tier1DeductionRate;
+    const tier2Deduction = Math.max(0, yearlyInterest - interestDeductionThreshold) * tier2DeductionRate;
+    return tier1Deduction + tier2Deduction;
+}
+
+const totalTaxDeductions = computed(() => {
+    return yearlyBreakdown.value.reduce((sum, year) => {
+        const yearlyInterest = year.fixedInterest + year.variableInterest + year.bankLoanInterest;
+        return sum + calculateTaxDeduction(yearlyInterest);
+    }, 0);
+});
+
+const firstYearTaxDeduction = computed(() => {
+    if (yearlyBreakdown.value.length === 0) return 0;
+    const firstYear = yearlyBreakdown.value[0];
+    const firstYearInterest = firstYear.fixedInterest + firstYear.variableInterest + firstYear.bankLoanInterest;
+    return calculateTaxDeduction(firstYearInterest);
+});
+
+const totalAmountPaid = computed(() => {
+    return totalLoanAll.value + totalInterestAll.value;
+});
+
+const totalAmountWithTaxDeductions = computed(() => {
+    return totalAmountPaid.value - totalTaxDeductions.value;
+});
+
+const firstYearMonthlyCostNet = computed(() => {
+    if (yearlyBreakdown.value.length === 0) return 0;
+    const firstYearMonthlyCost = yearlyBreakdown.value[0].monthlyHousingCost;
+    return firstYearMonthlyCost - firstYearTaxDeduction.value / 12;
 });
 
 function formatCurrency(value: number): string {
@@ -950,141 +999,64 @@ onMounted(() => {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div
-                                class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                            >
-                                <div
-                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Total Loan Amount
-                                    </span>
-                                    <span class="text-xl font-semibold">
-                                        {{
-                                            formatCurrency(
-                                                fixedLoanPlusBond +
-                                                    variableLoanAmount,
-                                            )
-                                        }}
-                                    </span>
+                            <div class="flex flex-col gap-4">
+                                <!-- Row 1: Loan Amounts -->
+                                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Fixed Loan (F30)</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(fixedLoanPlusBond) }}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Variable Loan ({{ inputs.flexibleLoanType }})</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(variableLoanAmount) }}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Bank Loan</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(bankLoanAmount) }}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Total Loan</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(totalLoanAll) }}</span>
+                                    </div>
                                 </div>
-                                <div
-                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Fixed Loan (F30)
-                                    </span>
-                                    <span class="text-xl font-semibold">
-                                        {{ formatCurrency(fixedLoanPlusBond) }}
-                                    </span>
-                                    <span class="text-xs text-muted-foreground">
-                                        {{ inputs.interestRateF30 }}% +
-                                        {{ fixedBidragssats }}% bidrag =
-                                        {{ fixedEffectiveRate.toFixed(2) }}%
-                                    </span>
+
+                                <!-- Row 2: Interest Amounts -->
+                                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Fixed Interest</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(totalFixedInterest) }}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Variable Interest</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(totalVariableInterest) }}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Bank Interest</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(totalBankLoanInterest) }}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Total Interest</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(totalInterestAll) }}</span>
+                                    </div>
                                 </div>
-                                <div
-                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Variable Loan ({{
-                                            inputs.flexibleLoanType
-                                        }})
-                                    </span>
-                                    <span class="text-xl font-semibold">
-                                        {{
-                                            formatCurrency(
-                                                summary.variableLoanAmount,
-                                            )
-                                        }}
-                                    </span>
-                                    <span class="text-xs text-muted-foreground">
-                                        {{
-                                            inputs.flexibleLoanType === 'F3'
-                                                ? inputs.interestRateF3
-                                                : inputs.interestRateF5
-                                        }}% + {{ variableBidragssats }}% bidrag
-                                        =
-                                        {{ variableEffectiveRate.toFixed(2) }}%
-                                    </span>
-                                </div>
-                                <div
-                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Total Interest Paid
-                                    </span>
-                                    <span class="text-xl font-semibold">
-                                        {{
-                                            formatCurrency(
-                                                summary.totalInterestPaid,
-                                            )
-                                        }}
-                                    </span>
-                                </div>
-                                <div
-                                    v-if="bankLoanAmount > 0"
-                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Bank Loan Interest
-                                    </span>
-                                    <span class="text-xl font-semibold">
-                                        {{
-                                            formatCurrency(totalBankLoanInterest)
-                                        }}
-                                    </span>
-                                    <span class="text-xs text-muted-foreground">
-                                        {{ inputs.bankLoanInterest }}% over
-                                        {{ inputs.bankLoanPeriod }} years
-                                    </span>
-                                </div>
-                                <div
-                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Total Amount Paid
-                                    </span>
-                                    <span class="text-xl font-semibold">
-                                        {{
-                                            formatCurrency(
-                                                summary.totalAmountPaid,
-                                            )
-                                        }}
-                                    </span>
-                                </div>
-                                <div
-                                    class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Monthly Utilities
-                                    </span>
-                                    <span class="text-xl font-semibold">
-                                        {{
-                                            formatCurrency(
-                                                summary.monthlyUtilities,
-                                            )
-                                        }}
-                                    </span>
-                                </div>
-                                <div
-                                    class="flex flex-col gap-1 rounded-lg bg-primary/10 p-4 sm:col-span-2 lg:col-span-3"
-                                >
-                                    <span class="text-sm text-muted-foreground">
-                                        Average Monthly Housing Cost
-                                    </span>
-                                    <span
-                                        class="text-2xl font-bold text-primary"
-                                    >
-                                        {{
-                                            formatCurrency(
-                                                summary.averageMonthlyHousingCost,
-                                            )
-                                        }}
-                                    </span>
-                                    <span class="text-xs text-muted-foreground">
-                                        Mortgage payment + utilities
-                                    </span>
+
+                                <!-- Row 3: Totals with Tax Deductions -->
+                                <div class="grid gap-4 sm:grid-cols-3">
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">Total Amount Paid</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(totalAmountPaid) }}</span>
+                                        <span class="text-xs text-muted-foreground">Loan + Interest</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-muted/50 p-4">
+                                        <span class="text-sm text-muted-foreground">After Tax Deductions</span>
+                                        <span class="text-xl font-semibold">{{ formatCurrency(totalAmountWithTaxDeductions) }}</span>
+                                        <span class="text-xs text-muted-foreground">Saved: {{ formatCurrency(totalTaxDeductions) }}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 rounded-lg bg-primary/10 p-4">
+                                        <span class="text-sm text-muted-foreground">1st Year Monthly Cost</span>
+                                        <span class="text-2xl font-bold text-primary">{{ formatCurrency(firstYearMonthlyCostNet) }}</span>
+                                        <span class="text-xs text-muted-foreground">After tax deductions</span>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>

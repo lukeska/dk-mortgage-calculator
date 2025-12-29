@@ -35,6 +35,16 @@ beforeEach(function () {
         'inflation_repairs' => 2.00,
         'inflation_rent' => 2.00,
         'variable_rate_overrides' => null,
+        'loan_total_amount' => 4166667,
+        'fixed_loan_total_amount' => 4166667,
+        'variable_loan_total_amount' => 0,
+        'bank_loan_total_amount' => 0,
+        'fixed_interest_total_amount' => 5000000,
+        'variable_interest_total_amount' => 0,
+        'bank_interest_total_amount' => 0,
+        'total_tax_deductions' => 1500000,
+        'first_year_tax_deduction' => 60000,
+        'first_year_monthly_cost' => 25000,
     ];
 });
 

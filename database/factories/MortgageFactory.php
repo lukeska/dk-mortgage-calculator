@@ -44,6 +44,16 @@ class MortgageFactory extends Factory
             'inflation_repairs' => fake()->randomFloat(2, 1, 4),
             'inflation_rent' => fake()->randomFloat(2, 1, 4),
             'variable_rate_overrides' => null,
+            'loan_total_amount' => fake()->numberBetween(1000000, 8000000),
+            'fixed_loan_total_amount' => fake()->numberBetween(0, 8000000),
+            'variable_loan_total_amount' => fake()->numberBetween(0, 4000000),
+            'bank_loan_total_amount' => fake()->numberBetween(0, 1000000),
+            'fixed_interest_total_amount' => fake()->numberBetween(0, 5000000),
+            'variable_interest_total_amount' => fake()->numberBetween(0, 3000000),
+            'bank_interest_total_amount' => fake()->numberBetween(0, 500000),
+            'total_tax_deductions' => fake()->numberBetween(500000, 3000000),
+            'first_year_tax_deduction' => fake()->numberBetween(30000, 80000),
+            'first_year_monthly_cost' => fake()->numberBetween(10000, 50000),
         ];
     }
 }

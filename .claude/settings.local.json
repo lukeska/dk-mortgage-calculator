@@ -15,7 +15,8 @@
       "Bash(composer show:*)",
       "mcp__herd__get_site_information",
       "mcp__herd__start_debug_session",
-      "mcp__herd__stop_debug_session"
+      "mcp__herd__stop_debug_session",
+      "Bash(php vendor/bin/pint:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

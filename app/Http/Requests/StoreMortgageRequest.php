@@ -45,6 +45,16 @@ class StoreMortgageRequest extends FormRequest
             'inflation_rent' => ['required', 'numeric', 'min:0', 'max:100'],
             'variable_rate_overrides' => ['nullable', 'array'],
             'variable_rate_overrides.*' => ['numeric', 'min:0', 'max:100'],
+            'loan_total_amount' => ['required', 'integer', 'min:0'],
+            'fixed_loan_total_amount' => ['required', 'integer', 'min:0'],
+            'variable_loan_total_amount' => ['required', 'integer', 'min:0'],
+            'bank_loan_total_amount' => ['required', 'integer', 'min:0'],
+            'fixed_interest_total_amount' => ['required', 'integer', 'min:0'],
+            'variable_interest_total_amount' => ['required', 'integer', 'min:0'],
+            'bank_interest_total_amount' => ['required', 'integer', 'min:0'],
+            'total_tax_deductions' => ['required', 'integer', 'min:0'],
+            'first_year_tax_deduction' => ['required', 'integer', 'min:0'],
+            'first_year_monthly_cost' => ['required', 'integer', 'min:0'],
         ];
     }
 }
